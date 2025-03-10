@@ -576,6 +576,11 @@ extension Blackbird {
                 }
             }
 
+            /// Reset internal notion of what Swift type corresponds to what SQL table
+            public func resetResolvedTables() {
+                Table.resetResolvedTables()
+            }
+
             // Exactly like the function below, but accepts an async action
             public func transaction<R: Sendable>(_ action: (@Sendable (_ core: isolated Blackbird.Database.Core) async throws -> R) ) async throws -> R {
                 let result = try await cancellableTransaction { core in

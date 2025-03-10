@@ -220,6 +220,12 @@ extension Blackbird {
         private static let resolvedTablesWithDatabases = Locked([Table: Set<Database.InstanceID>]())
         private static let resolvedTableNamesInDatabases = Locked([Database.InstanceID: Set<String>]())
         
+        // In service of `Core.resetResolvedTables`
+        internal static func resetResolvedTables() {
+            Self.resolvedTablesWithDatabases.withLock { $0.removeAll() }
+            Self.resolvedTableNamesInDatabases.withLock { $0.removeAll() }
+        }
+        
         public init(name: String, columns: [Column], primaryKeyColumnNames: [String] = ["id"], indexes: [Index] = [], fullTextSearchableColumns: [String: BlackbirdModelFullTextSearchableColumn], emptyInstance: any BlackbirdModel) {
             if columns.isEmpty { fatalError("No columns specified") }
             let orderedColumnNames = columns.map { $0.name }
