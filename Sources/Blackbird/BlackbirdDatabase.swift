@@ -208,7 +208,7 @@ extension Blackbird {
         
         public func hash(into hasher: inout Hasher) { hasher.combine(id) }
 
-        public enum Error: Swift.Error {
+        public enum Error: Swift.Error, Equatable {
             case anotherInstanceExistsWithPath(path: String)
             case cannotOpenDatabaseAtPath(path: String, description: String)
             case unsupportedConfigurationAtPath(path: String)
