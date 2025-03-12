@@ -208,7 +208,7 @@ extension Blackbird {
         
         public func hash(into hasher: inout Hasher) { hasher.combine(id) }
 
-        public enum Error: Swift.Error {
+        public enum Error: Swift.Error, Equatable {
             case anotherInstanceExistsWithPath(path: String)
             case cannotOpenDatabaseAtPath(path: String, description: String)
             case unsupportedConfigurationAtPath(path: String)
@@ -574,6 +574,11 @@ extension Blackbird {
                     previousDataVersion = newVersion
                     changeReporter?.reportEntireDatabaseChange()
                 }
+            }
+
+            /// Reset internal notion of what Swift type corresponds to what SQL table
+            public func resetResolvedTables() {
+                Table.resetResolvedTables()
             }
 
             // Exactly like the function below, but accepts an async action
