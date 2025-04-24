@@ -40,6 +40,21 @@ struct DecodedStructuredQueryTests {
         #expect(dsq.query == "SELECT * FROM `FakeModel` ORDER BY `name` DESC LIMIT 10")
         #expect(dsq.whereArguments == nil)
     }
+
+    @Test func selectAllOrderByLimitOffset() {
+        let dsq = DecodedStructuredQuery(orderBy: [.descending(\FakeModel.$name)],
+                                         limit: 10,
+                                         offset: 20)
+        #expect(dsq.query == "SELECT * FROM `FakeModel` ORDER BY `name` DESC LIMIT 10 OFFSET 20")
+        #expect(dsq.whereArguments == nil)
+    }
+
+    @Test func selectAllOrderByOffsetNoOffset() {
+        let dsq = DecodedStructuredQuery(orderBy: [.descending(\FakeModel.$name)],
+                                         offset: 20)
+        #expect(dsq.query == "SELECT * FROM `FakeModel` ORDER BY `name` DESC")
+        #expect(dsq.whereArguments == nil)
+    }
 }
 
 fileprivate struct FakeModel:BlackbirdModel {
