@@ -74,7 +74,7 @@ public struct BlackbirdModelOrderClause<T: BlackbirdModel>: Sendable, CustomDebu
     public var debugDescription: String { orderByClause(table: T.table) }
 }
 
-fileprivate struct DecodedStructuredQuery: Sendable {
+internal struct DecodedStructuredQuery: Sendable {
     let query: String
     let arguments: [Sendable]
     let whereClause: String?        // already included in query
