@@ -31,13 +31,14 @@
 //  SOFTWARE.
 //
 
+import AsyncExtensions
 import Foundation
 @preconcurrency import Combine
 
 public extension Blackbird {
-    /// A change to a table in a Blackbird database, as published by a ``ChangePublisher``.
+    /// A change to a table in a Blackbird database, as emitted by a ``ChangeSequence``.
     ///
-    /// For `BlackbirdModel` tables, ``BlackbirdModel/changePublisher(in:)`` provides a typed ``ModelChange`` instead.
+    /// For `BlackbirdModel` tables, ``BlackbirdModel/changeSequence(in:)`` provides a typed ``ModelChange`` instead.
     struct Change: Sendable {
         internal let table: String
         internal let primaryKeys: PrimaryKeyValues?
@@ -72,12 +73,12 @@ public extension Blackbird {
         }
     }
 
-    /// A Publisher that emits when data in a Blackbird table has changed.
+    /// An `AsyncSequence` that emits when data in a Blackbird table has changed.
     ///
     /// The ``Blackbird/Change`` passed indicates which rows and columns in the table have changed.
-    typealias ChangePublisher = AnyPublisher<Change, Never>
+    typealias ChangeSequence = AsyncPassthroughSubject<Change>
 
-    /// A change to a table in a Blackbird database, as published by a ``ChangePublisher``.
+    /// A change to a table in a Blackbird database, as emitted by a ``ChangeSequence``.
     struct ModelChange<T: BlackbirdModel>: Sendable {
         internal let type: T.Type
         internal let primaryKeys: PrimaryKeyValues?
@@ -132,10 +133,10 @@ public extension Blackbird {
         }
     }
 
-    /// A Publisher that emits when data in a BlackbirdModel table has changed.
+    /// An AsyncSequence that emits when data in a BlackbirdModel table has changed.
     ///
     /// The ``Blackbird/ModelChange`` passed indicates which rows and columns in the table have changed.
-    typealias ModelChangePublisher<T: BlackbirdModel> = AnyPublisher<ModelChange<T>, Never>
+    typealias ModelChangeSequence<T: BlackbirdModel> = AsyncPassthroughSubject<ModelChange<T>>
 
     internal static func isRelevantPrimaryKeyChange(watchedPrimaryKeys: Blackbird.PrimaryKeyValues?, changedPrimaryKeys: Blackbird.PrimaryKeyValues?) -> Bool {
         guard let watchedPrimaryKeys else {
@@ -157,19 +158,18 @@ public extension Blackbird {
     }
 }
 
-// MARK: - Change publisher
+// MARK: - Change sequence
 
 extension Blackbird.Database {
 
-    /// The ``Blackbird/ChangePublisher`` for the specified table.
+    /// The ``Blackbird/ChangeSequence`` for the specified table.
     /// - Parameter tableName: The table name.
-    /// - Returns: A ``Blackbird/ChangePublisher`` that publishes ``Blackbird/Change`` objects for each change in the specified table.
+    /// - Returns: A ``Blackbird/ChangeSequence`` that emits ``Blackbird/Change`` objects for each change in the specified table.
     ///
-    /// For `BlackbirdModel` tables, ``BlackbirdModel/changePublisher(in:)`` provides a typed ``Blackbird/ModelChange`` instead.
+    /// For `BlackbirdModel` tables, ``BlackbirdModel/changeSequence(in:)`` provides a typed ``Blackbird/ModelChange`` instead.
     ///
-    /// > - The publisher may send from any thread.
     /// > - Changes may be over-reported.
-    public func changePublisher(for tableName: String) -> Blackbird.ChangePublisher { changeReporter.changePublisher(for: tableName) }
+    public func changeSequence(for tableName: String) -> Blackbird.ChangeSequence { changeReporter.changeSequence(for: tableName) }
 
     internal final class ChangeReporter: @unchecked Sendable /* unchecked due to use of internal locking */ {
         internal final class AccumulatedChanges {
@@ -190,7 +190,7 @@ extension Blackbird.Database {
         private var bufferedRowIDsForIgnoredTable = Set<Int64>()
         
         private var accumulatedChangesByTable: [String: AccumulatedChanges] = [:]
-        private var tableChangePublishers: [String: PassthroughSubject<Blackbird.Change, Never>] = [:]
+        private var tableChangeSubjects: [String: AsyncPassthroughSubject<Blackbird.Change>] = [:]
         
         private var debugPrintEveryReportedChange = false
         
@@ -203,12 +203,12 @@ extension Blackbird.Database {
             self.cache = cache
         }
 
-        internal func changePublisher(for tableName: String) -> Blackbird.ChangePublisher {
+        internal func changeSequence(for tableName: String) -> Blackbird.ChangeSequence {
             lock.withLock {
-                if let existing = tableChangePublishers[tableName] { return existing.eraseToAnyPublisher() }
-                let publisher = PassthroughSubject<Blackbird.Change, Never>()
-                tableChangePublishers[tableName] = publisher
-                return publisher.eraseToAnyPublisher()
+                if let existing = tableChangeSubjects[tableName] { return existing }
+                let new = AsyncPassthroughSubject<Blackbird.Change>()
+                tableChangeSubjects[tableName] = new
+                return new
             }
         }
 
@@ -251,7 +251,7 @@ extension Blackbird.Database {
             cache.invalidate()
 
             lock.lock()
-            for tableName in tableChangePublishers.keys { accumulatedChangesByTable[tableName] = AccumulatedChanges.entireTableChange() }
+            for tableName in tableChangeSubjects.keys { accumulatedChangesByTable[tableName] = AccumulatedChanges.entireTableChange() }
             let needsFlush = activeTransactions.isEmpty
             lock.unlock()
             if needsFlush { flush() }
@@ -291,7 +291,7 @@ extension Blackbird.Database {
         
         private func flush() {
             lock.lock()
-            let publishers = tableChangePublishers
+            let subjects = tableChangeSubjects
             let changesByTable = accumulatedChangesByTable
             accumulatedChangesByTable.removeAll()
             lock.unlock()
@@ -301,10 +301,10 @@ extension Blackbird.Database {
                     if debugPrintEveryReportedChange {
                         print("[Blackbird.ChangeReporter] changed \(tableName) (\(keys.count) keys, fields: \(accumulatedChanges.columnNames?.joined(separator: ",") ?? "(all/unknown)"))")
                     }
-                    if let publisher = publishers[tableName] { publisher.send(Blackbird.Change(table: tableName, primaryKeys: keys, columnNames: accumulatedChanges.columnNames)) }
+                    if let sequence = subjects[tableName] { sequence.send(Blackbird.Change(table: tableName, primaryKeys: keys, columnNames: accumulatedChanges.columnNames)) }
                 } else {
                     if debugPrintEveryReportedChange { print("[Blackbird.ChangeReporter] changed \(tableName) (unknown keys, fields: \(accumulatedChanges.columnNames?.joined(separator: ",") ?? "(all/unknown)"))") }
-                    if let publisher = publishers[tableName] { publisher.send(Blackbird.Change(table: tableName, primaryKeys: nil, columnNames: accumulatedChanges.columnNames)) }
+                    if let sequence = subjects[tableName] { sequence.send(Blackbird.Change(table: tableName, primaryKeys: nil, columnNames: accumulatedChanges.columnNames)) }
                 }
             }
         }        
@@ -337,13 +337,19 @@ extension Blackbird {
             fileprivate var tableName: String? = nil
             fileprivate var database: Blackbird.Database? = nil
             fileprivate var generator: CachedResultGenerator<T>? = nil
-            fileprivate var tableChangePublisher: AnyCancellable? = nil
+            fileprivate var tableChangeMonitoringTask: Task<Void, Never>? = nil
         }
         
         private let config = Locked(State())
         
         public init(initialValue: T? = nil) {
             valuePublisher = CurrentValueSubject<T?, Never>(initialValue)
+        }
+        
+        deinit {
+            self.config.withLock {
+                $0.tableChangeMonitoringTask?.cancel()
+            }
         }
 
         public func subscribe(to tableName: String, in database: Blackbird.Database?, generator: CachedResultGenerator<T>?) {
@@ -375,13 +381,16 @@ extension Blackbird {
                 $0.cachedResults = nil
 
                 if let database = $0.database, let tableName = $0.tableName {
-                    $0.tableChangePublisher = database.changeReporter.changePublisher(for: tableName).sink { [weak self] _ in
-                        guard let self else { return }
-                        self.config.withLock { $0.cachedResults = nil }
-                        self.enqueueUpdate()
+                    $0.tableChangeMonitoringTask = Task { [weak self] in
+                        for await _ in database.changeReporter.changeSequence(for: tableName) {
+                            guard let self else { return }
+                            self.config.withLock { $0.cachedResults = nil }
+                            self.enqueueUpdate()
+                        }
                     }
                 } else {
-                    $0.tableChangePublisher = nil
+                    $0.tableChangeMonitoringTask?.cancel()
+                    $0.tableChangeMonitoringTask = nil
                 }
             }
         }
