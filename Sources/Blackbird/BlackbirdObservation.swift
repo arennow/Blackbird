@@ -32,7 +32,6 @@
 //
 
 import Observation
-import Combine
 
 // MARK: - BlackbirdModelQueryObserver
 
@@ -54,7 +53,7 @@ public final class BlackbirdModelQueryObserver<T: BlackbirdModel, R: Any> {
     public var result: R?
 
     @ObservationIgnored private var database: Blackbird.Database?
-    @ObservationIgnored private var observer: AnyCancellable? = nil
+    @ObservationIgnored private var observer: Task<Void, Never>? = nil
     @ObservationIgnored private var multicolumnPrimaryKeyForInvalidation: [Blackbird.Value]?
     @ObservationIgnored private var columnsForInvalidation: [T.BlackbirdColumnKeyPath]?
     @ObservationIgnored private var fetcher: ((_ database: Blackbird.Database) async throws -> R)
@@ -74,6 +73,10 @@ public final class BlackbirdModelQueryObserver<T: BlackbirdModel, R: Any> {
             fetcher
         )
     }
+    
+    deinit {
+        self.observer?.cancel()
+    }
 
     /// Set or change the ``Blackbird/Database`` to read from and monitor for changes.
     public func bind(to database: Blackbird.Database?) {
@@ -86,8 +89,11 @@ public final class BlackbirdModelQueryObserver<T: BlackbirdModel, R: Any> {
         observer = nil
         result = nil
         
-        observer = T.changePublisher(in: database, multicolumnPrimaryKey: multicolumnPrimaryKeyForInvalidation, columns: columnsForInvalidation ?? []).sink { _ in
-            Task.detached { [weak self] in await self?.update() }
+        observer = Task { [multicolumnPrimaryKeyForInvalidation, columnsForInvalidation, weak self] in
+            for await _ in T.changePublisher(in: database, multicolumnPrimaryKey: multicolumnPrimaryKeyForInvalidation, columns: columnsForInvalidation ?? []) {
+                guard let self else { return }
+                await self.update()
+            }
         }
         Task.detached { [weak self] in await self?.update() }
     }
@@ -134,7 +140,7 @@ public final class BlackbirdModelObserver<T: BlackbirdModel> {
 
     @ObservationIgnored private var database: Blackbird.Database?
     @ObservationIgnored private var multicolumnPrimaryKey: [Blackbird.Value]?
-    @ObservationIgnored private var observer: AnyCancellable? = nil
+    @ObservationIgnored private var observer: Task<Void, Never>? = nil
     
     /// Initializer to track a single-column primary-key value.
     public convenience init(in database: Blackbird.Database? = nil, primaryKey: Sendable? = nil) {
@@ -145,6 +151,10 @@ public final class BlackbirdModelObserver<T: BlackbirdModel> {
     public init(in database: Blackbird.Database? = nil, multicolumnPrimaryKey: [Sendable]? = nil) {
         self.multicolumnPrimaryKey = multicolumnPrimaryKey?.map { try! Blackbird.Value.fromAny($0) } ?? nil
         bind(to: database)
+    }
+    
+    deinit {
+        self.observer?.cancel()
     }
     
     /// Set or change the ``Blackbird/Database`` to read from and monitor for changes.
@@ -175,8 +185,11 @@ public final class BlackbirdModelObserver<T: BlackbirdModel> {
         
         guard let database, let multicolumnPrimaryKey else { return }
         
-        observer = T.changePublisher(in: database, multicolumnPrimaryKey: multicolumnPrimaryKey).sink { _ in
-            Task.detached { [weak self] in await self?.update() }
+        observer = Task { [weak self] in
+            for await _ in T.changePublisher(in: database, multicolumnPrimaryKey: multicolumnPrimaryKey) {
+                guard let self else { return }
+                await self.update()
+            }
         }
         Task.detached { [weak self] in await self?.update() }
     }

@@ -230,7 +230,7 @@ extension View {
 
 public final class BlackbirdModelInstanceChangeObserver<T: BlackbirdModel>: @unchecked Sendable { /* unchecked due to internal locking */
     private let primaryKeyValues: [Blackbird.Value]
-    private let changeObserver = Blackbird.Locked<AnyCancellable?>(nil)
+    private let changeObserver = Blackbird.Locked<Task<Void, Never>?>(nil)
     
     private let currentDatabase = Blackbird.Locked<Blackbird.Database?>(nil)
     private let hasEverUpdated = Blackbird.Locked(false)
@@ -255,6 +255,12 @@ public final class BlackbirdModelInstanceChangeObserver<T: BlackbirdModel>: @unc
         _currentInstance = Binding<T?>(get: { nil }, set: { _ in })
     }
     
+    deinit {
+        self.changeObserver.withLock {
+            $0?.cancel()
+        }
+    }
+    
     public func observe(database: Blackbird.Database?, currentInstance: Binding<T?>) {
         _currentInstance = currentInstance
         guard let database, database != currentDatabase.value else { return }
@@ -273,9 +279,8 @@ public final class BlackbirdModelInstanceChangeObserver<T: BlackbirdModel>: @unc
             if observer != nil { return }
             
             let primaryKeyValues = primaryKeyValues
-            observer = T.changePublisher(in: currentDatabase, multicolumnPrimaryKey: primaryKeyValues)
-            .sink { _ in
-                Task.detached { [weak self] in
+            observer = Task { [weak self] in
+                for await _ in T.changePublisher(in: currentDatabase, multicolumnPrimaryKey: primaryKeyValues) {
                     await MainActor.run { [weak self] in self?.cachedInstance.value = nil }
                     await self?.update()
                 }
@@ -409,7 +414,7 @@ extension Blackbird {
         private let bindingLock = Blackbird.Lock()
         
         private struct State {
-            var changeObserver: AnyCancellable? = nil
+            var changeObserver: Task<Void, Never>? = nil
             var database: Blackbird.Database? = nil
             var primaryKeyValues: [Blackbird.Value]? = nil
         }
@@ -419,6 +424,12 @@ extension Blackbird {
         public init() {
             _instance = Binding<T?>(get: { nil }, set: { _ in })
             _didLoad = Binding<Bool>(get: { false }, set: { _ in })
+        }
+        
+        deinit {
+            self.state.withLock {
+                $0.changeObserver?.cancel
+            }
         }
 
         /// Update a binding with the current instance matching a single-column primary-key value named `"id"`, and keep it updated over time.
@@ -463,9 +474,8 @@ extension Blackbird {
                 state.database = database
                 state.primaryKeyValues = multicolumnPrimaryKey.map { try! Blackbird.Value.fromAny($0) }
                 if let database, let primaryKeyValues = state.primaryKeyValues {
-                    state.changeObserver = T.changePublisher(in: database, multicolumnPrimaryKey: primaryKeyValues)
-                    .sink { _ in
-                        Task.detached { [weak self] in
+                    state.changeObserver = Task { [weak self] in
+                        for await _ in T.changePublisher(in: database, multicolumnPrimaryKey: primaryKeyValues) {
                             guard let self else { return }
                             let instance = try? await T.read(from: database, multicolumnPrimaryKey: primaryKeyValues)
                             await MainActor.run {
@@ -572,13 +582,19 @@ internal final class BlackbirdColumnObserverInternal<T: BlackbirdModel, V: Black
     private let configLock = Blackbird.Lock()
     private var column: T.BlackbirdColumnKeyPath
     private var database: Blackbird.Database? = nil
-    private var listeners: [AnyCancellable] = []
+    private var listeners: [Task<Void, Never>] = []
     private var lastPrimaryKeyValue: Blackbird.Value? = nil
 
     public init(modelType: T.Type, column: T.BlackbirdColumnKeyPath) {
         self.column = column
         _primaryKey = Binding<Any?>(get: { nil }, set: { _ in })
         _result = Binding<V?>(get: { nil }, set: { _ in })
+    }
+    
+    deinit {
+        for listener in listeners {
+            listener.cancel()
+        }
     }
     
     public func bind(to database: Blackbird.Database? = nil, primaryKey: Binding<Any?>, result: Binding<V?>) {
@@ -593,9 +609,11 @@ internal final class BlackbirdColumnObserverInternal<T: BlackbirdModel, V: Black
             self.database = database
             self.lastPrimaryKeyValue = newPK
             if let database, let primaryKey = newPK {
-                T.changePublisher(in: database, primaryKey: primaryKey, columns: [column])
-                .sink { [weak self] _ in self?.update() }
-                .store(in: &listeners)
+                listeners.append(Task { [column, weak self] in
+                    for await _ in T.changePublisher(in: database, primaryKey: primaryKey, columns: [column]) {
+                        self?.update()
+                    }
+                })
             }
             
             return true
