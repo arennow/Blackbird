@@ -133,17 +133,17 @@ import Foundation
 /// Synchronous access is provided in ``Blackbird/Database/transaction(_:)``.
 ///
 /// ## Change notifications
-/// When a table is modified, its ``Blackbird/ChangePublisher`` emits a ``Blackbird/Change`` specifying which primary-key values and columns have changed:
+/// When a table is modified, its ``Blackbird/ChangeSequence`` emits a ``Blackbird/Change`` specifying which primary-key values and columns have changed:
 /// ```swift
-/// let listener = Post.changePublisher(in: db).sink { change in
+/// for await change in Post.changeSequence(in: db) {
 ///     print("Post IDs changed: \(change.primaryKeys ?? "all of them")")
 /// }
 /// ```
 ///
-/// These can be automatically filtered with ``BlackbirdModel/changePublisher(in:primaryKey:columns:)`` to specific primary-key values and/or columns that may have changed:
+/// These can be automatically filtered with ``BlackbirdModel/changeSequence(in:primaryKey:columns:)`` to specific primary-key values and/or columns that may have changed:
 ///
 /// ```swift
-/// let listener = Post.changePublisher(in: db, primaryKey: 3, columns: [\.$title]).sink { _ in
+/// for await _ in Post.changeSequence(in: db, primaryKey: 3, columns: [\.$title]) {
 ///     print("Post 3 changed its title")
 /// }
 /// ```
@@ -336,35 +336,33 @@ extension BlackbirdModel {
     /// Creates a new instance of the called model type with all values set to their SQLite defaults: nil for optionals, 0 for numeric types, empty string for string values, and empty data for data values.
     public static func instanceFromDefaults() -> Self { SchemaGenerator.instanceFromDefaults(Self.self) }
 
-    /// The change publisher for this model's table.
+    /// The change sequence for this model's table.
     /// - Parameter database: The ``Blackbird/Database`` instance to monitor.
-    /// - Returns: The ``Blackbird/ModelChangePublisher`` for this model's table.
+    /// - Returns: The ``Blackbird/ModelChangeSequence`` for this model's table.
     ///
-    /// See ``BlackbirdModel/changePublisher(in:primaryKey:columns:)`` for built-in filtering by primary-key and/or changed columns.
+    /// See ``BlackbirdModel/changeSequence(in:primaryKey:columns:)`` for built-in filtering by primary-key and/or changed columns.
     ///
-    /// > - The publisher may send from any thread.
     /// > - Changes may be over-reported.
-    public static func changePublisher(in database: Blackbird.Database) -> some AsyncSequence<Blackbird.ModelChange<Self>, Never> & Sendable {
-        database.changeReporter.changePublisher(for: self.tableName)
+    public static func changeSequence(in database: Blackbird.Database) -> some AsyncSequence<Blackbird.ModelChange<Self>, Never> & Sendable {
+        database.changeReporter.changeSequence(for: self.tableName)
         .map { Blackbird.ModelChange(type: Self.self, from: $0) }
     }
 
-    /// The change publisher for this model's table, filtered by single-column primary key and/or changed columns.
+    /// The change sequence for this model's table, filtered by single-column primary key and/or changed columns.
     /// - Parameters:
     ///   - database: The ``Blackbird/Database`` instance to monitor.
     ///   - primaryKey: The single-column primary-key value set to monitor. If `nil`, changes to any keys are reported.
     ///   - columns: Specific columns to monitor. If empty, changes to any column(s) are reported.
-    /// - Returns: The filtered ``Blackbird/ModelChangePublisher``.
+    /// - Returns: The filtered ``Blackbird/ModelChangeSequence``.
     ///
-    /// Use ``BlackbirdModel/changePublisher(in:multicolumnPrimaryKey:columns:)`` for models with multi-column primary keys.
+    /// Use ``BlackbirdModel/changeSequence(in:multicolumnPrimaryKey:columns:)`` for models with multi-column primary keys.
     ///
-    /// > - The publisher may send from any thread.
     /// > - Changes may be over-reported.
-    public static func changePublisher(in database: Blackbird.Database, primaryKey: Blackbird.Value? = nil, columns: [Self.BlackbirdColumnKeyPath] = []) -> some AsyncSequence<Blackbird.ModelChange<Self>, Never> & Sendable {
-        if primaryKey != nil, table.primaryKeys.count > 1 { fatalError("\(String(describing: Self.self)).changePublisher: Single-column primary key value specified on table with a multi-column primary key") }
+    public static func changeSequence(in database: Blackbird.Database, primaryKey: Blackbird.Value? = nil, columns: [Self.BlackbirdColumnKeyPath] = []) -> some AsyncSequence<Blackbird.ModelChange<Self>, Never> & Sendable {
+        if primaryKey != nil, table.primaryKeys.count > 1 { fatalError("\(String(describing: Self.self)).changeSequence: Single-column primary key value specified on table with a multi-column primary key") }
         let selfType = Self.self
         
-        return database.changeReporter.changePublisher(for: self.tableName).filter { change in
+        return database.changeReporter.changeSequence(for: self.tableName).filter { change in
             if let primaryKey, let changedKeys = change.primaryKeys, !changedKeys.contains([primaryKey]) { return false }
             
             if !columns.isEmpty, let changedColumns = change.columnNames {
@@ -378,20 +376,19 @@ extension BlackbirdModel {
         }
     }
 
-    /// The change publisher for this model's table, filtered by multi-column primary key and/or changed columns.
+    /// The change sequence for this model's table, filtered by multi-column primary key and/or changed columns.
     /// - Parameters:
     ///   - database: The ``Blackbird/Database`` instance to monitor.
     ///   - multicolumnPrimaryKey: The multi-column primary-key value set to monitor. If `nil`, changes to any keys are reported.
     ///   - columns: Specific columns to monitor. If empty, changes to any column(s) are reported.
-    /// - Returns: The filtered ``Blackbird/ChangePublisher``.
+    /// - Returns: The filtered ``Blackbird/ChangeSequence``.
     ///
-    /// Use ``BlackbirdModel/changePublisher(in:primaryKey:columns:)`` for models with single-column primary keys.
+    /// Use ``BlackbirdModel/changeSequence(in:primaryKey:columns:)`` for models with single-column primary keys.
     ///
-    /// > - The publisher may send from any thread.
     /// > - Changes may be over-reported.
-    public static func changePublisher(in database: Blackbird.Database, multicolumnPrimaryKey: [Blackbird.Value]?, columns: [Self.BlackbirdColumnKeyPath] = []) -> some AsyncSequence<Blackbird.ModelChange<Self>, Never> & Sendable {
+    public static func changeSequence(in database: Blackbird.Database, multicolumnPrimaryKey: [Blackbird.Value]?, columns: [Self.BlackbirdColumnKeyPath] = []) -> some AsyncSequence<Blackbird.ModelChange<Self>, Never> & Sendable {
         let selfType = Self.self
-        return database.changeReporter.changePublisher(for: self.tableName).filter { change in
+        return database.changeReporter.changeSequence(for: self.tableName).filter { change in
             if let multicolumnPrimaryKey, let changedKeys = change.primaryKeys, !changedKeys.contains(multicolumnPrimaryKey) { return false }
             
             if !columns.isEmpty, let changedColumns = change.columnNames {
@@ -405,22 +402,21 @@ extension BlackbirdModel {
         }
     }
 
-    /// The change publisher for this model's table, filtered by single-column primary key and/or ignored columns.
+    /// The change sequence for this model's table, filtered by single-column primary key and/or ignored columns.
     /// - Parameters:
     ///   - database: The ``Blackbird/Database`` instance to monitor.
     ///   - primaryKey: The single-column primary-key value set to monitor. If `nil`, changes to any keys are reported.
     ///   - ignoredColumns: Specific columns to ignore if changed. If empty, changes to any column(s) are reported.
-    /// - Returns: The filtered ``Blackbird/ModelChangePublisher``.
+    /// - Returns: The filtered ``Blackbird/ModelChangeSequence``.
     ///
-    /// Use ``BlackbirdModel/changePublisher(in:multicolumnPrimaryKey:ignoredColumns:)`` for models with multi-column primary keys.
+    /// Use ``BlackbirdModel/changeSequence(in:multicolumnPrimaryKey:ignoredColumns:)`` for models with multi-column primary keys.
     ///
-    /// > - The publisher may send from any thread.
     /// > - Changes may be over-reported.
-    public static func changePublisher(in database: Blackbird.Database, primaryKey: Blackbird.Value? = nil, ignoredColumns: [Self.BlackbirdColumnKeyPath]) -> some AsyncSequence<Blackbird.ModelChange<Self>, Never> & Sendable {
-        if primaryKey != nil, table.primaryKeys.count > 1 { fatalError("\(String(describing: Self.self)).changePublisher: Single-column primary key value specified on table with a multi-column primary key") }
+    public static func changeSequence(in database: Blackbird.Database, primaryKey: Blackbird.Value? = nil, ignoredColumns: [Self.BlackbirdColumnKeyPath]) -> some AsyncSequence<Blackbird.ModelChange<Self>, Never> & Sendable {
+        if primaryKey != nil, table.primaryKeys.count > 1 { fatalError("\(String(describing: Self.self)).changeSequence: Single-column primary key value specified on table with a multi-column primary key") }
         let selfType = Self.self
         
-        return database.changeReporter.changePublisher(for: self.tableName).filter { change in
+        return database.changeReporter.changeSequence(for: self.tableName).filter { change in
             if let primaryKey, let changedKeys = change.primaryKeys, !changedKeys.contains([primaryKey]) { return false }
             
             if !ignoredColumns.isEmpty, let changedColumns = change.columnNames {
@@ -434,20 +430,19 @@ extension BlackbirdModel {
         }
     }
 
-    /// The change publisher for this model's table, filtered by multi-column primary key and/or ignored columns.
+    /// The change sequence for this model's table, filtered by multi-column primary key and/or ignored columns.
     /// - Parameters:
     ///   - database: The ``Blackbird/Database`` instance to monitor.
     ///   - multicolumnPrimaryKey: The multi-column primary-key value set to monitor. If `nil`, changes to any keys are reported.
     ///   - ignoredColumns: Specific columns to ignore if changed. If empty, changes to any column(s) are reported.
-    /// - Returns: The filtered ``Blackbird/ChangePublisher``.
+    /// - Returns: The filtered ``Blackbird/ChangeSequence``.
     ///
-    /// Use ``BlackbirdModel/changePublisher(in:primaryKey:ignoredColumns:)`` for models with single-column primary keys.
+    /// Use ``BlackbirdModel/changeSequence(in:primaryKey:ignoredColumns:)`` for models with single-column primary keys.
     ///
-    /// > - The publisher may send from any thread.
     /// > - Changes may be over-reported.
-    public static func changePublisher(in database: Blackbird.Database, multicolumnPrimaryKey: [Blackbird.Value]?, ignoredColumns: [Self.BlackbirdColumnKeyPath]) -> some AsyncSequence<Blackbird.ModelChange<Self>, Never> & Sendable {
+    public static func changeSequence(in database: Blackbird.Database, multicolumnPrimaryKey: [Blackbird.Value]?, ignoredColumns: [Self.BlackbirdColumnKeyPath]) -> some AsyncSequence<Blackbird.ModelChange<Self>, Never> & Sendable {
         let selfType = Self.self
-        return database.changeReporter.changePublisher(for: self.tableName).filter { change in
+        return database.changeReporter.changeSequence(for: self.tableName).filter { change in
             if let multicolumnPrimaryKey, let changedKeys = change.primaryKeys, !changedKeys.contains(multicolumnPrimaryKey) { return false }
             
             if !ignoredColumns.isEmpty, let changedColumns = change.columnNames {

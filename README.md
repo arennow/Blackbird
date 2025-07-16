@@ -109,7 +109,7 @@ for row in try await Post.query(in: db, "SELECT MAX(id) AS max FROM $T WHERE url
 Monitor for row- and column-level changes with Combine:
 
 ```swift
-let listener = Post.changePublisher(in: db).sink { change in
+for await change in Post.changeSequence(in: db) {
     if change.hasPrimaryKeyChanged(7) {
         print("Post 7 has changed")
     }
@@ -120,12 +120,12 @@ let listener = Post.changePublisher(in: db).sink { change in
 }
 
 // Or monitor a single column by key-path:
-let listener = Post.changePublisher(in: db, columns: [\.$title]).sink { _ in
+for await _ in Post.changeSequence(in: db, columns: [\.$title]) {
     print("A post's title changed")
 }
 
 // Or listen for changes for a specific primary key:
-let listener = Post.changePublisher(in: db, primaryKey: 3, columns: [\.$title]).sink { _ in
+for await _ in Post.changeSequence(in: db, primaryKey: 3, columns: [\.$title]) {
     print("Post 3's title changed")
 }
 ```

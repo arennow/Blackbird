@@ -809,7 +809,7 @@ final class BlackbirdTestTests: XCTestCase, @unchecked Sendable {
         try await TestModelWithDescription.resolveSchema(in: db)
         
         _testChangeNotificationsListeners.append(Task {
-            for await change in TestModel.changePublisher(in: db) {
+            for await change in TestModel.changeSequence(in: db) {
                 if let expectedTable = self._testChangeNotificationsExpectedChangedTable {
                     XCTAssertEqual(expectedTable, change.type.tableName, "Change listener called for incorrect table")
                 }
@@ -818,7 +818,7 @@ final class BlackbirdTestTests: XCTestCase, @unchecked Sendable {
         })
 
         _testChangeNotificationsListeners.append(Task {
-            for await change in TestModelWithDescription.changePublisher(in: db) {
+            for await change in TestModelWithDescription.changeSequence(in: db) {
                 if change.primaryKeys == nil {
                     XCTAssertNil(self._testChangeNotificationsExpectedChangedKeys)
                 } else {

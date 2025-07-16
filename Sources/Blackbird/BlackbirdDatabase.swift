@@ -64,7 +64,7 @@ internal protocol BlackbirdQueryable {
     ///
     /// While inside the transaction's `action`:
     /// * Queries against the isolated ``Blackbird/Database/Core`` can be executed synchronously (using `try` instead of `try await`).
-    /// * Change notifications for this database via ``Blackbird/ChangePublisher`` are queued until the transaction is completed. When delivered, multiple changes for the same table are consolidated into a single notification with every affected primary-key value.
+    /// * Change notifications for this database via ``Blackbird/ChangeSequence`` are queued until the transaction is completed. When delivered, multiple changes for the same table are consolidated into a single notification with every affected primary-key value.
     ///
     ///     __Note:__ Notifications may be sent for changes occurring during the transaction even if the transaction is rolled back.
     ///
@@ -241,7 +241,7 @@ extension Blackbird {
             /// When using ``debugPrintEveryQuery``, parameterized query values will be included in the logged query strings instead of their placeholders. Useful for debugging.
             public static let debugPrintQueryParameterValues = Options(rawValue: 1 << 4)
 
-            /// Logs every change reported by ``Blackbird/ChangePublisher`` instances for this database with `print()`. Useful for debugging.
+            /// Logs every change reported by ``Blackbird/ChangeSequence`` instances for this database with `print()`. Useful for debugging.
             public static let debugPrintEveryReportedChange  = Options(rawValue: 1 << 5)
 
             /// Logs cache hits and misses with `print()`. Useful for debugging.

@@ -90,7 +90,7 @@ public final class BlackbirdModelQueryObserver<T: BlackbirdModel, R: Any> {
         result = nil
         
         observer = Task { [multicolumnPrimaryKeyForInvalidation, columnsForInvalidation, weak self] in
-            for await _ in T.changePublisher(in: database, multicolumnPrimaryKey: multicolumnPrimaryKeyForInvalidation, columns: columnsForInvalidation ?? []) {
+            for await _ in T.changeSequence(in: database, multicolumnPrimaryKey: multicolumnPrimaryKeyForInvalidation, columns: columnsForInvalidation ?? []) {
                 guard let self else { return }
                 await self.update()
             }
@@ -186,7 +186,7 @@ public final class BlackbirdModelObserver<T: BlackbirdModel> {
         guard let database, let multicolumnPrimaryKey else { return }
         
         observer = Task { [weak self] in
-            for await _ in T.changePublisher(in: database, multicolumnPrimaryKey: multicolumnPrimaryKey) {
+            for await _ in T.changeSequence(in: database, multicolumnPrimaryKey: multicolumnPrimaryKey) {
                 guard let self else { return }
                 await self.update()
             }
