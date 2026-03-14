@@ -32,5 +32,5 @@ let package = Package(
             name: "BlackbirdTests",
             dependencies: ["Blackbird"]),
     ],
-    swiftLanguageVersions: [.v5]
+    swiftLanguageModes: [.v5]
 )
