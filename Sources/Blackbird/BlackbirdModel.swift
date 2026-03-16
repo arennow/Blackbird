@@ -245,12 +245,6 @@ public protocol BlackbirdModel: Codable, Equatable, Identifiable, Hashable, Send
     /// > Note: The cache is not limited in byte size — only entry count. Use caution with memory usage if enabled for large tables.
     static var cacheLimit: Int { get }
 
-    /// Shorthand for this type's `ModelArrayUpdater` interface for SwiftUI.
-    typealias ArrayUpdater = Blackbird.ModelArrayUpdater<Self>
-    
-    /// Shorthand for this type's `ModelInstanceUpdater` interface for SwiftUI.
-    typealias InstanceUpdater = Blackbird.ModelInstanceUpdater<Self>
-
     /// How row-level migration failures should be handled. The default is ``BlackbirdModelMigrationErrorAction/throwError``.
     ///
     /// Row-level migration failures may be caused when:

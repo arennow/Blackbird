@@ -130,60 +130,6 @@ for await _ in Post.changeSequence(in: db, primaryKey: 3, columns: [\.$title]) {
 }
 ```
 
-### SwiftUI
-
-Blackbird is designed for SwiftUI, offering async-loading, automatically-updating result wrappers:
-
-```swift
-struct RootView: View {
-    // The database that all child views will automatically use
-    @StateObject var database = try! Blackbird.Database.inMemoryDatabase()
-
-    var body: some View {
-        PostListView()
-        .environment(\.blackbirdDatabase, database)
-    }
-}
-
-struct PostListView: View {
-    // Async-loading, auto-updating array of matching instances
-    @BlackbirdLiveModels({ try await Post.read(from: $0, orderBy: .ascending(\.$id)) }) var posts
-    
-    // Async-loading, auto-updating rows from a custom query
-    @BlackbirdLiveQuery(tableName: "Post", { try await $0.query("SELECT MAX(id) AS max FROM Post") }) var maxID
-
-    var body: some View {
-        VStack {
-            if posts.didLoad {
-                List {
-                    ForEach(posts.results) { post in
-                        NavigationLink(destination: PostView(post: post.liveModel)) {
-                            Text(post.title)
-                        }
-                    }
-                }
-            } else {
-                ProgressView()
-            }
-        }
-        .navigationTitle(maxID.didLoad ? "\(maxID.results.first?["max"]?.intValue ?? 0) posts" : "Loading…")
-    }
-}
-
-struct PostView: View {
-    // Auto-updating instance
-    @BlackbirdLiveModel var post: Post?
-
-    var body: some View {
-        VStack {
-            if let post {
-                Text(post.title)
-            }
-        }
-    }
-}
-```
-
 ## Blackbird.Database
 
 A lightweight async wrapper around [SQLite](https://www.sqlite.org/) that can be used with or without [BlackbirdModel](#BlackbirdModel).

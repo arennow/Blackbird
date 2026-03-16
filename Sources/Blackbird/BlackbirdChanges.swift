@@ -34,7 +34,6 @@
 import AsyncExtensions
 import Foundation
 import Synchronization
-@preconcurrency import Combine
 
 public extension Blackbird {
     /// A change to a table in a Blackbird database, as emitted by a ``ChangeSequence``.
@@ -312,96 +311,6 @@ extension Blackbird.Database {
     }
 }
 
-// MARK: - General query cache with Combine publisher
 
-extension Blackbird {
 
-    /// A function to generate arbitrary results from a database, called from an async throwing context and passed the ``Blackbird/Database`` as its sole argument.
-    ///
-    /// Used by Blackbird's SwiftUI property wrappers.
-    ///
-    /// ## Examples
-    ///
-    /// ```swift
-    /// { try await Post.read(from: $0, id: 123) }
-    /// ```
-    /// ```swift
-    /// { try await $0.query("SELECT COUNT(*) FROM Post") }
-    /// ```
-    public typealias CachedResultGenerator<T: Sendable> = (@Sendable (_ db: Blackbird.Database) async throws -> T)
 
-    internal final class CachedResultPublisher<T: Sendable>: Sendable {
-        public let valuePublisher: CurrentValueSubject<T?, Never>
-
-        private struct State: Sendable {
-            fileprivate var cachedResults: T? = nil
-            fileprivate var tableName: String? = nil
-            fileprivate var database: Blackbird.Database? = nil
-            fileprivate var generator: CachedResultGenerator<T>? = nil
-            fileprivate var tableChangeMonitoringTask: Task<Void, Never>? = nil
-        }
-        
-        private let config = Mutex(State())
-        
-        public init(initialValue: T? = nil) {
-            valuePublisher = CurrentValueSubject<T?, Never>(initialValue)
-        }
-        
-        deinit {
-            self.config.withLock {
-                $0.tableChangeMonitoringTask?.cancel()
-            }
-        }
-
-        public func subscribe(to tableName: String, in database: Blackbird.Database?, generator: CachedResultGenerator<T>?) {
-            config.withLock {
-                $0.tableName = tableName
-                $0.generator = generator
-            }
-            self.changeDatabase(database)
-            enqueueUpdate()
-        }
-        
-        private func update(_ cachedResults: T?) async throws {
-            let state = config.withLock { $0 }
-            let results: T?
-            if let cachedResults = state.cachedResults {
-                results = cachedResults
-            } else {
-                results = (state.generator != nil && state.database != nil ? try await state.generator!(state.database!) : nil)
-                config.withLock { $0.cachedResults = results }
-                valuePublisher.send(results)
-            }
-        }
-        
-        private func changeDatabase(_ newDatabase: Database?) {
-            config.withLock {
-                if newDatabase == $0.database { return }
-                
-                $0.database = newDatabase
-                $0.cachedResults = nil
-
-                if let database = $0.database, let tableName = $0.tableName {
-                    $0.tableChangeMonitoringTask = Task { [weak self] in
-                        for await _ in database.changeReporter.changeSequence(for: tableName) {
-                            guard let self else { return }
-                            self.config.withLock { $0.cachedResults = nil }
-                            self.enqueueUpdate()
-                        }
-                    }
-                } else {
-                    $0.tableChangeMonitoringTask?.cancel()
-                    $0.tableChangeMonitoringTask = nil
-                }
-            }
-        }
-        
-        private func enqueueUpdate() {
-            let cachedResults = config.withLock { $0.cachedResults }
-            Task.detached { [weak self] in
-                do { try await self?.update(cachedResults) }
-                catch { print("[Blackbird.CachedResultPublisher<\(String(describing: T.self))>] ⚠️ Error updating: \(error.localizedDescription)") }
-            }
-        }
-    }
-}
