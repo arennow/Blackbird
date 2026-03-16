@@ -1,13 +1,13 @@
 {
-  "originHash" : "513bb69c36baa2708ad81072907de65581aa30283c42fdbb23bc3184e037c9bc",
+  "originHash" : "d4a0ac42f8ceb00cfe4974c3d612da3976a5c2531b803054a73550b189814f8d",
   "pins" : [
     {
       "identity" : "asyncextensions",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/sideeffect-io/AsyncExtensions.git",
       "state" : {
-        "revision" : "3442d3d046800f1974bda096faaf0ac510b21154",
-        "version" : "0.5.3"
+        "revision" : "c2b32caf189993285b5a782fe7cd658ed1fa9b9a",
+        "version" : "0.5.5"
       }
     },
     {
@@ -15,8 +15,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/apple/swift-collections.git",
       "state" : {
-        "revision" : "c1805596154bb3a265fd91b8ac0c4433b4348fb0",
-        "version" : "1.2.0"
+        "revision" : "8d9834a6189db730f6264db7556a7ffb751e99ee",
+        "version" : "1.4.0"
       }
     }
   ],
