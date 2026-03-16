@@ -32,6 +32,7 @@
 //
 
 import Foundation
+import Synchronization
 import SQLite3
 
 extension Blackbird {
@@ -310,12 +311,11 @@ extension Blackbird {
         }
         
         internal final class InstancePool: Sendable {
-            private static let lock = Lock()
-            private static let _nextInstanceID = Locked<InstanceID>(0)
-            private static let pathsOfCurrentInstances = Locked(Set<String>())
+            private static let _nextInstanceID = Atomic<InstanceID>(0)
+            private static let pathsOfCurrentInstances = Mutex(Set<String>())
 
             internal static func nextInstanceID() -> InstanceID {
-                _nextInstanceID.withLock { $0 += 1; return $0 }
+                _nextInstanceID.wrappingAdd(1, ordering: .relaxed).newValue
             }
 
             internal static func addInstance(path: String) -> Bool {
@@ -323,7 +323,7 @@ extension Blackbird {
             }
 
             internal static func removeInstance(path: String) {
-                pathsOfCurrentInstances.withLock { $0.remove(path) }
+                _ = pathsOfCurrentInstances.withLock { $0.remove(path) }
             }
         }
 
@@ -342,13 +342,13 @@ extension Blackbird {
         internal let perfLog: PerformanceLogger
         internal let fileChangeMonitor: FileChangeMonitor?
                 
-        private let isClosedLocked = Locked(false)
+        private let _isClosed = Atomic<Bool>(false)
         
         /// Whether ``close()`` has been called on this database yet. Does **not** indicate whether the close operation has completed.
         ///
         /// > Note: Once an instance is closed, it is never reopened.
         public var isClosed: Bool {
-            get { isClosedLocked.value }
+            get { _isClosed.load(ordering: .relaxed) }
         }
 
         /// Instantiates a new SQLite database in memory, without persisting to a file.
@@ -429,7 +429,7 @@ extension Blackbird {
             sqlite3_update_hook(handle, { ctx, operation, dbName, tableName, rowid in
                 guard let ctx else { return }
                 let changeReporter = Unmanaged<ChangeReporter>.fromOpaque(ctx).takeUnretainedValue()
-                changeReporter.numChangesReportedByUpdateHook += 1
+                changeReporter.incrementUpdateHookCount()
                 if let tableName, let tableNameStr = String(cString: tableName, encoding: .utf8) {
                     changeReporter.reportChange(tableName: tableNameStr, rowID: rowid, changedColumns: nil)
                 }
@@ -456,7 +456,7 @@ extension Blackbird {
             let spState = perfLog.begin(signpost: .closeDatabase)
             defer { perfLog.end(state: spState) }
 
-            isClosedLocked.value = true
+            _isClosed.store(true, ordering: .relaxed)
             await core.close()
 
             if let path { InstancePool.removeInstance(path: path) }

@@ -33,6 +33,7 @@
 
 import Foundation
 import SQLite3
+import Synchronization
 
 /// A small, fast, lightweight SQLite database wrapper and model layer.
 public class Blackbird {
@@ -244,138 +245,62 @@ public class Blackbird {
 
 // MARK: - Utilities
 
-/// A basic locking utility.
-public protocol BlackbirdLock: Sendable {
-    func lock()
-    func unlock()
-    @discardableResult func withLock<R>(_ body: () throws -> R) rethrows -> R where R: Sendable
-}
-extension BlackbirdLock {
-    @discardableResult public func withLock<R>(_ body: () throws -> R) rethrows -> R where R: Sendable {
-        lock()
-        defer { unlock() }
-        return try body()
-    }
-}
-
-import os
 extension Blackbird {
-    /// Blackbird's lock primitive, offered for public use.
-    public static func Lock() -> BlackbirdLock {
-        if #available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *) {
-            return UnfairLock()
-        } else {
-            return LegacyUnfairLock()
+    internal final class FileChangeMonitor: Sendable {
+        private struct State {
+            var sources: [DispatchSourceFileSystemObject] = []
+            var changeHandler: (@Sendable () -> Void)? = nil
+            var isClosed = false
+            var currentExpectedChanges = Set<Int64>()
         }
-    }
 
-    @available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-    fileprivate final class UnfairLock: BlackbirdLock {
-        private let _lock = OSAllocatedUnfairLock()
-        internal func lock() { _lock.lock() }
-        internal func unlock() { _lock.unlock() }
-    }
-
-    fileprivate final class LegacyUnfairLock: BlackbirdLock, @unchecked Sendable /* unchecked due to known-safe use of an UnsafeMutablePointer */ {
-        private var _lock: UnsafeMutablePointer<os_unfair_lock>
-        internal func lock()   { os_unfair_lock_lock(_lock) }
-        internal func unlock() { os_unfair_lock_unlock(_lock) }
-
-        internal init() {
-            _lock = UnsafeMutablePointer<os_unfair_lock>.allocate(capacity: 1)
-            _lock.initialize(to: os_unfair_lock())
-        }
-        deinit { _lock.deallocate() }
-    }
-
-    /// Blackbird's locked-value utility, offered for public use. Useful when conforming to `Sendable`.
-    public final class Locked<T: Sendable>: @unchecked Sendable /* unchecked due to use of internal locking */ {
-        public var value: T {
-            get {
-                return lock.withLock { _value }
-            }
-            set {
-                lock.withLock { _value = newValue }
-            }
-        }
-        
-        private let lock = Lock()
-        private var _value: T
-        
-        public init(_ initialValue: T) {
-            _value = initialValue
-        }
-        
-        @discardableResult
-        public func withLock<R>(_ body: (inout T) -> R) -> R where R: Sendable {
-            return lock.withLock { return body(&_value) }
-        }
-    }
-
-    internal final class FileChangeMonitor: @unchecked Sendable /* unchecked due to use of internal locking */ {
-        private var sources: [DispatchSourceFileSystemObject] = []
-
-        private var changeHandler: (() -> Void)?
-        private var isClosed = false
-        private var currentExpectedChanges = Set<Int64>()
-        
-        private let lock = Lock()
+        private let state = Mutex(State())
 
         public func addFile(filePath: String) {
             let fsPath = (filePath as NSString).fileSystemRepresentation
             let fd = open(fsPath, O_EVTONLY)
             guard fd >= 0 else { return }
-            
+
             let source = DispatchSource.makeFileSystemObjectSource(fileDescriptor: fd, eventMask: [.write, .extend, .delete, .rename, .revoke], queue: nil)
             source.setCancelHandler { Darwin.close(fd) }
-            
+
             source.setEventHandler { [weak self] in
                 guard let self else { return }
-                self.lock.lock()
-                if self.currentExpectedChanges.isEmpty, !self.isClosed, let handler = self.changeHandler { handler() }
-                self.lock.unlock()
+                self.state.withLock { s in
+                    if s.currentExpectedChanges.isEmpty, !s.isClosed { s.changeHandler?() }
+                }
             }
 
             source.activate()
-            
-            self.lock.lock()
-            self.sources.append(source)
-            self.lock.unlock()
+            state.withLock { $0.sources.append(source) }
         }
-        
+
         deinit {
             cancel()
         }
-        
-        public func onChange(_ handler: @escaping (() -> Void)) {
-            self.lock.lock()
-            self.changeHandler = handler
-            self.lock.unlock()
+
+        public func onChange(_ handler: @escaping @Sendable () -> Void) {
+            state.withLock { $0.changeHandler = handler }
         }
-        
+
         public func cancel() {
-            self.lock.lock()
-            self.isClosed = true
-            for source in sources { source.cancel() }
-            self.lock.unlock()
-            
+            state.withLock { s in
+                s.isClosed = true
+                for source in s.sources { source.cancel() }
+            }
         }
-        
+
         public func beginExpectedChange(_ changeID: Int64) {
-            self.lock.lock()
-            self.currentExpectedChanges.insert(changeID)
-            self.lock.unlock()
+            state.withLock { _ = $0.currentExpectedChanges.insert(changeID) }
         }
-        
+
         public func endExpectedChange(_ changeID: Int64) {
-            self.lock.lock()
-            self.currentExpectedChanges.remove(changeID)
-            self.lock.unlock()
+            state.withLock { _ = $0.currentExpectedChanges.remove(changeID) }
         }
     }
     
     
-    /// Blackbird's async-sempahore utility, offered for public use.
+    /// Blackbird's async-sempahore utility
     ///
     /// Suggested use:
     ///
@@ -393,14 +318,14 @@ extension Blackbird {
     /// ```
     /// Inspired by [Sebastian Toivonen's approach](https://forums.swift.org/t/semaphore-alternatives-for-structured-concurrency/59353/3).
     /// Consider using the Gwendal Roué's more-featured [Semaphore](https://github.com/groue/Semaphore) instead.
-    public final class Semaphore: Sendable {
+    final class Semaphore: Sendable {
         private struct State: Sendable {
             var value = 0
             var waiting: [CheckedContinuation<Void, Never>] = []
         }
-        private let state: Locked<State>
+        private let state: Mutex<State>
 
-        public init(value: Int = 0) { state = Locked(State(value: value)) }
+        public init(value: Int = 0) { state = Mutex(State(value: value)) }
         
         public func wait() async {
             let wait = state.withLock { state in

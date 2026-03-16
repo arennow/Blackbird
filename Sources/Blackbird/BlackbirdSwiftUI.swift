@@ -33,6 +33,7 @@
 
 import SwiftUI
 @preconcurrency import Combine
+import Synchronization
 
 // Required to use with the @StateObject wrapper
 extension Blackbird.Database: ObservableObject { }
@@ -228,26 +229,25 @@ extension View {
 }
 
 
-public final class BlackbirdModelInstanceChangeObserver<T: BlackbirdModel>: @unchecked Sendable { /* unchecked due to internal locking */
+public final class BlackbirdModelInstanceChangeObserver<T: BlackbirdModel>: @unchecked Sendable { /* unchecked due to PassthroughSubject */
     private let primaryKeyValues: [Blackbird.Value]
-    private let changeObserver = Blackbird.Locked<Task<Void, Never>?>(nil)
+    private let changeObserver = Mutex<Task<Void, Never>?>(nil)
     
-    private let currentDatabase = Blackbird.Locked<Blackbird.Database?>(nil)
-    private let hasEverUpdated = Blackbird.Locked(false)
+    private let currentDatabase = Mutex<Blackbird.Database?>(nil)
     
     private let _changePublisher = PassthroughSubject<T?, Never>()
     public var changePublisher: AnyPublisher<T?, Never> { _changePublisher.eraseToAnyPublisher() }
 
-    private let _updatesEnabled = Blackbird.Locked(true)
+    private let _updatesEnabled = Mutex<Bool>(true)
     public var updatesEnabled: Bool {
-        get { _updatesEnabled.value }
+        get { _updatesEnabled.withLock { $0 } }
         set {
-            _updatesEnabled.value = newValue
+            _updatesEnabled.withLock { $0 = newValue }
             Task.detached { [weak self] in await self?.update() }
         }
     }
     
-    private let cachedInstance = Blackbird.Locked<T?>(nil)
+    private let cachedInstance = Mutex<T?>(nil)
     @Binding public var currentInstance: T?
 
     public init(primaryKeyValues: [Blackbird.Value]) {
@@ -263,9 +263,9 @@ public final class BlackbirdModelInstanceChangeObserver<T: BlackbirdModel>: @unc
     
     public func observe(database: Blackbird.Database?, currentInstance: Binding<T?>) {
         _currentInstance = currentInstance
-        guard let database, database != currentDatabase.value else { return }
-        currentDatabase.value = database
-        cachedInstance.value = nil
+        guard let database, database != currentDatabase.withLock({ $0 }) else { return }
+        currentDatabase.withLock { $0 = database }
+        cachedInstance.withLock { $0 = nil }
         
         if updatesEnabled {
             Task.detached { [weak self] in await self?.update() }
@@ -273,7 +273,7 @@ public final class BlackbirdModelInstanceChangeObserver<T: BlackbirdModel>: @unc
     }
     
     public func update() async {
-        guard let currentDatabase = currentDatabase.value, updatesEnabled else { return }
+        guard let currentDatabase = currentDatabase.withLock({ $0 }), updatesEnabled else { return }
         
         changeObserver.withLock { observer in
             if observer != nil { return }
@@ -281,13 +281,13 @@ public final class BlackbirdModelInstanceChangeObserver<T: BlackbirdModel>: @unc
             let primaryKeyValues = primaryKeyValues
             observer = Task { [weak self] in
                 for await _ in T.changeSequence(in: currentDatabase, multicolumnPrimaryKey: primaryKeyValues) {
-                    await MainActor.run { [weak self] in self?.cachedInstance.value = nil }
+                    await MainActor.run { [weak self] in self?.cachedInstance.withLock { $0 = nil } }
                     await self?.update()
                 }
             }
         }
                 
-        if let cachedInstance = cachedInstance.value {
+        if let cachedInstance = cachedInstance.withLock({ $0 }) {
             currentInstance = cachedInstance
             await MainActor.run {
                 _changePublisher.send(cachedInstance)
@@ -297,7 +297,7 @@ public final class BlackbirdModelInstanceChangeObserver<T: BlackbirdModel>: @unc
         
         let instance = try? await T.read(from: currentDatabase, multicolumnPrimaryKey: primaryKeyValues)
         await MainActor.run {
-            cachedInstance.value = instance
+            cachedInstance.withLock { $0 = instance }
             currentInstance = instance
             _changePublisher.send(instance)
         }
@@ -338,34 +338,30 @@ extension Blackbird {
         @Binding public var results: Blackbird.LiveResults<Blackbird.Row>
 
         private let resultPublisher = CachedResultPublisher<[Blackbird.Row]>()
-        private var changePublishers: [AnyCancellable] = []
-        private let lock = Blackbird.Lock()
+        private let changePublishers = Mutex<[AnyCancellable]>([])
 
         public init() {
             _results = Binding<Blackbird.LiveResults<Blackbird.Row>>(get: { Blackbird.LiveResults<Blackbird.Row>() }, set: { _ in })
         }
         
         public func bind(from database: Blackbird.Database?, tableName: String, to results: Binding<Blackbird.LiveResults<Blackbird.Row>>, generator: CachedResultGenerator<[Blackbird.Row]>?) {
-            lock.lock()
-            defer { lock.unlock() }
-        
-            changePublishers.removeAll()
-            resultPublisher.subscribe(to: tableName, in: database, generator: generator)
-            _results = results
-            
-            changePublishers.append(resultPublisher.valuePublisher.sink { [weak self] value in
-                guard let self else { return }
-                let results: Blackbird.LiveResults<Blackbird.Row>
-                if let value {
-                    results = Blackbird.LiveResults<Blackbird.Row>(results: value, didLoad: true)
-                } else {
-                    results = Blackbird.LiveResults<Blackbird.Row>(results: [], didLoad: false)
-                }
-                
-                DispatchQueue.main.async { // kicking this to the next runloop to prevent state updates from happening while building the view
-                    self.results = results
-                }
-            })
+            changePublishers.withLock { publishers in
+                publishers.removeAll()
+                self.resultPublisher.subscribe(to: tableName, in: database, generator: generator)
+                self._results = results
+                publishers.append(self.resultPublisher.valuePublisher.sink { [weak self] value in
+                    guard let self else { return }
+                    let results: Blackbird.LiveResults<Blackbird.Row>
+                    if let value {
+                        results = Blackbird.LiveResults<Blackbird.Row>(results: value, didLoad: true)
+                    } else {
+                        results = Blackbird.LiveResults<Blackbird.Row>(results: [], didLoad: false)
+                    }
+                    DispatchQueue.main.async { // kicking this to the next runloop to prevent state updates from happening while building the view
+                        self.results = results
+                    }
+                })
+            }
         }
     }
 
@@ -374,8 +370,7 @@ extension Blackbird {
         @Binding public var results: Blackbird.LiveResults<T>
 
         private let resultPublisher: CachedResultPublisher<[T]>
-        private var changePublishers: [AnyCancellable] = []
-        private let lock = Blackbird.Lock()
+        private let changePublishers = Mutex<[AnyCancellable]>([])
 
         public init(initialValue: [T]? = nil) {
             _results = Binding<Blackbird.LiveResults<T>>(get: { Blackbird.LiveResults<T>(results: initialValue ?? [], didLoad: initialValue != nil) }, set: { _ in })
@@ -383,23 +378,21 @@ extension Blackbird {
         }
         
         public func bind(from database: Blackbird.Database?, to results: Binding<Blackbird.LiveResults<T>>, generator: CachedResultGenerator<[T]>?) {
-            lock.lock()
-            defer { lock.unlock() }
-            
-            changePublishers.removeAll()
-            resultPublisher.subscribe(to: T.table.name, in: database, generator: generator)
-            _results = results
-            
-            changePublishers.append(resultPublisher.valuePublisher.sink { [weak self] value in
-                guard let self else { return }
-                DispatchQueue.main.async {
-                    if let value {
-                        self.results = Blackbird.LiveResults<T>(results: value, didLoad: true)
-                    } else {
-                        self.results = Blackbird.LiveResults<T>(results: [], didLoad: false)
+            changePublishers.withLock { publishers in
+                publishers.removeAll()
+                self.resultPublisher.subscribe(to: T.table.name, in: database, generator: generator)
+                self._results = results
+                publishers.append(self.resultPublisher.valuePublisher.sink { [weak self] value in
+                    guard let self else { return }
+                    DispatchQueue.main.async {
+                        if let value {
+                            self.results = Blackbird.LiveResults<T>(results: value, didLoad: true)
+                        } else {
+                            self.results = Blackbird.LiveResults<T>(results: [], didLoad: false)
+                        }
                     }
-                }
-            })
+                })
+            }
         }
     }
 }
@@ -411,7 +404,7 @@ extension Blackbird {
     public final class ModelInstanceUpdater<T: BlackbirdModel>: @unchecked Sendable { // unchecked due to internal locking
         @Binding public var instance: T?
         @Binding public var didLoad: Bool
-        private let bindingLock = Blackbird.Lock()
+        private let bindingLock = Mutex<Void>(())
         
         private struct State {
             var changeObserver: Task<Void, Never>? = nil
@@ -419,7 +412,7 @@ extension Blackbird {
             var primaryKeyValues: [Blackbird.Value]? = nil
         }
         
-        private let state = Blackbird.Locked(State())
+        private let state = Mutex(State())
 
         public init() {
             _instance = Binding<T?>(get: { nil }, set: { _ in })
@@ -428,7 +421,7 @@ extension Blackbird {
         
         deinit {
             self.state.withLock {
-                $0.changeObserver?.cancel
+                $0.changeObserver?.cancel()
             }
         }
 
@@ -465,7 +458,7 @@ extension Blackbird {
         ///
         /// See also: ``bind(from:to:didLoad:primaryKey:)`` and ``bind(from:to:didLoad:id:)``.
         public func bind(from database: Blackbird.Database?, to instance: Binding<T?>, didLoad: Binding<Bool>? = nil, multicolumnPrimaryKey: [Sendable]) {
-            bindingLock.withLock {
+            bindingLock.withLock { _ in
                 self._instance = instance
                 if let didLoad { self._didLoad = didLoad }
             }
@@ -575,42 +568,43 @@ extension Blackbird {
     }
 }
 
-internal final class BlackbirdColumnObserverInternal<T: BlackbirdModel, V: BlackbirdColumnWrappable>: @unchecked Sendable /* unchecked due to internal locking */ {
+internal final class BlackbirdColumnObserverInternal<T: BlackbirdModel, V: BlackbirdColumnWrappable>: @unchecked Sendable {
     @Binding private var primaryKey: Any?
     @Binding private var result: V?
 
-    private let configLock = Blackbird.Lock()
-    private var column: T.BlackbirdColumnKeyPath
-    private var database: Blackbird.Database? = nil
-    private var listeners: [Task<Void, Never>] = []
-    private var lastPrimaryKeyValue: Blackbird.Value? = nil
+    private struct Config {
+        var column: T.BlackbirdColumnKeyPath
+        var database: Blackbird.Database? = nil
+        var listeners: [Task<Void, Never>] = []
+        var lastPrimaryKeyValue: Blackbird.Value? = nil
+    }
+    private let config: Mutex<Config>
 
     public init(modelType: T.Type, column: T.BlackbirdColumnKeyPath) {
-        self.column = column
+        config = Mutex(Config(column: column))
         _primaryKey = Binding<Any?>(get: { nil }, set: { _ in })
         _result = Binding<V?>(get: { nil }, set: { _ in })
     }
     
     deinit {
-        for listener in listeners {
-            listener.cancel()
-        }
+        config.withLock { s in for listener in s.listeners { listener.cancel() } }
     }
     
     public func bind(to database: Blackbird.Database? = nil, primaryKey: Binding<Any?>, result: Binding<V?>) {
         _result = result
         _primaryKey = primaryKey
         
-        let needsUpdate = configLock.withLock {
+        let needsUpdate = config.withLock { s in
             let newPK = primaryKey.wrappedValue != nil ? try! Blackbird.Value.fromAny(primaryKey.wrappedValue) : nil
-            if let existingDB = self.database, let newDB = database, existingDB == newDB, lastPrimaryKeyValue == newPK { return false }
+            if let existingDB = s.database, let newDB = database, existingDB == newDB, s.lastPrimaryKeyValue == newPK { return false }
 
-            listeners.removeAll()
-            self.database = database
-            self.lastPrimaryKeyValue = newPK
-            if let database, let primaryKey = newPK {
-                listeners.append(Task { [column, weak self] in
-                    for await _ in T.changeSequence(in: database, primaryKey: primaryKey, columns: [column]) {
+            for listener in s.listeners { listener.cancel() }
+            s.listeners.removeAll()
+            s.database = database
+            s.lastPrimaryKeyValue = newPK
+            if let database, let pkValue = newPK {
+                s.listeners.append(Task { [column = s.column, weak self] in
+                    for await _ in T.changeSequence(in: database, primaryKey: pkValue, columns: [column]) {
                         self?.update()
                     }
                 })
@@ -635,6 +629,7 @@ internal final class BlackbirdColumnObserverInternal<T: BlackbirdModel, V: Black
     }
     
     private func update() {
+        let database = config.withLock { $0.database }
         guard let database else {
             setResult(nil)
             return
@@ -650,15 +645,10 @@ internal final class BlackbirdColumnObserverInternal<T: BlackbirdModel, V: Black
     }
     
     private func fetch(in database: Blackbird.Database) async throws {
-        configLock.lock()
-        let primaryKey = primaryKey
-        let column = column
-        let database = database
-        configLock.unlock()
+        let (primaryKeyValue, column) = config.withLock { s in (s.lastPrimaryKeyValue, s.column) }
+        guard let primaryKeyValue else { return }
     
-        guard let primaryKey else { return }
-    
-        guard let row = try await T.query(in: database, columns: [column], primaryKey: primaryKey) else {
+        guard let row = try await T.query(in: database, columns: [column], primaryKey: primaryKeyValue) else {
             setResult(nil)
             return
         }

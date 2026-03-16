@@ -1,0 +1,1 @@
+This project is migrating toward Swift 6 strict concurrency. Only make changes that maintain or improve concurrency safety. Prefer compiler-provable safety over assumptions or runtime checking.

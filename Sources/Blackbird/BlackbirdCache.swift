@@ -31,7 +31,8 @@
 //  SOFTWARE.
 //
 
-@preconcurrency import Foundation // @preconcurrency due to DispatchSource not being annotated
+import Foundation
+import Synchronization
 
 extension Blackbird.Database {
     public struct CachePerformanceMetrics: Sendable {
@@ -102,176 +103,158 @@ extension Blackbird.Database {
             lowMemoryEventSource.cancel()
         }
     
-        private final class TableCache: @unchecked Sendable { /* unchecked due to internal locking */
-            private let lock = Blackbird.Lock()
-        
-            // Cached data
-            private var modelsByPrimaryKey: [Blackbird.Value: CacheEntry<any BlackbirdModel>] = [:]
-            private var cachedQueries: [[Blackbird.Value]: CacheEntry<Sendable>] = [:]
-            
-            // Performance counters
-            private var hits: Int = 0
-            private var misses: Int = 0
-            private var writes: Int = 0
-            private var rowInvalidations: Int = 0
-            private var queryInvalidations: Int = 0
-            private var tableInvalidations: Int = 0
-            private var evictions: Int = 0
-            private var lowMemoryFlushes: Int = 0
-            
+        private final class TableCache: Sendable {
+            private struct State {
+                var modelsByPrimaryKey: [Blackbird.Value: CacheEntry<any BlackbirdModel>] = [:]
+                var cachedQueries: [[Blackbird.Value]: CacheEntry<Sendable>] = [:]
+                var hits: Int = 0
+                var misses: Int = 0
+                var writes: Int = 0
+                var rowInvalidations: Int = 0
+                var queryInvalidations: Int = 0
+                var tableInvalidations: Int = 0
+                var evictions: Int = 0
+                var lowMemoryFlushes: Int = 0
+            }
+
+            private let state = Mutex(State())
+
             func get(primaryKey: Blackbird.Value) -> (any BlackbirdModel)? {
-                lock.lock()
-                defer { lock.unlock() }
-
-                if let hit = modelsByPrimaryKey[primaryKey] {
-                    hit.lastAccessed = mach_absolute_time()
-                    hits += 1
-                    return hit.value()
-                } else {
-                    misses += 1
-                    return nil
+                state.withLock { s in
+                    if let hit = s.modelsByPrimaryKey[primaryKey] {
+                        hit.lastAccessed = mach_absolute_time()
+                        s.hits += 1
+                        return hit.value()
+                    } else {
+                        s.misses += 1
+                        return nil
+                    }
                 }
             }
-            
+
             func get(primaryKeys: [Blackbird.Value]) -> (hits: [any BlackbirdModel], missedKeys: [Blackbird.Value]) {
-                lock.lock()
-                defer { lock.unlock() }
-
-                var hitResults: [any BlackbirdModel] = []
-                var missedKeys: [Blackbird.Value] = []
-                for key in primaryKeys {
-                    if let hit = modelsByPrimaryKey[key] { hitResults.append(hit.value()) } else { missedKeys.append(key) }
+                state.withLock { s in
+                    var hitResults: [any BlackbirdModel] = []
+                    var missedKeys: [Blackbird.Value] = []
+                    for key in primaryKeys {
+                        if let hit = s.modelsByPrimaryKey[key] { hitResults.append(hit.value()) } else { missedKeys.append(key) }
+                    }
+                    s.hits += hitResults.count
+                    s.misses += missedKeys.count
+                    return (hits: hitResults, missedKeys: missedKeys)
                 }
-                hits += hitResults.count
-                misses += missedKeys.count
-                return (hits: hitResults, missedKeys: missedKeys)
             }
-            
+
             func getQuery(cacheKey: [Blackbird.Value]) -> CachedQueryResult {
-                lock.lock()
-                defer { lock.unlock() }
-
-                if let hit = cachedQueries[cacheKey] {
-                    hits += 1
-                    return .hit(value: hit.value())
-                } else {
-                    misses += 1
-                    return .miss
+                state.withLock { s in
+                    if let hit = s.cachedQueries[cacheKey] {
+                        s.hits += 1
+                        return .hit(value: hit.value())
+                    } else {
+                        s.misses += 1
+                        return .miss
+                    }
                 }
             }
-            
+
             func add(primaryKey: Blackbird.Value, instance: any BlackbirdModel, pruneToLimit: Int? = nil) {
-                lock.lock()
-                defer { lock.unlock() }
-
-                modelsByPrimaryKey[primaryKey] = CacheEntry(instance)
-                writes += 1
-                
-                if let pruneToLimit {
-                    inLock_prune(entryLimit: pruneToLimit)
+                state.withLock { s in
+                    s.modelsByPrimaryKey[primaryKey] = CacheEntry(instance)
+                    s.writes += 1
+                    if let pruneToLimit { Self.prune(&s, entryLimit: pruneToLimit) }
                 }
             }
-            
+
             func addQuery(cacheKey: [Blackbird.Value], result: Sendable?, pruneToLimit: Int? = nil) {
-                lock.lock()
-                defer { lock.unlock() }
-
-                cachedQueries[cacheKey] = CacheEntry(result)
-                writes += 1
-
-                if let pruneToLimit {
-                    inLock_prune(entryLimit: pruneToLimit)
+                state.withLock { s in
+                    s.cachedQueries[cacheKey] = CacheEntry(result)
+                    s.writes += 1
+                    if let pruneToLimit { Self.prune(&s, entryLimit: pruneToLimit) }
                 }
-            
             }
 
             func delete(primaryKey: Blackbird.Value) {
-                lock.lock()
-                defer { lock.unlock() }
-
-                modelsByPrimaryKey.removeValue(forKey: primaryKey)
-                writes += 1
+                state.withLock { s in
+                    _ = s.modelsByPrimaryKey.removeValue(forKey: primaryKey)
+                    s.writes += 1
+                }
             }
 
-            private func inLock_prune(entryLimit: Int) {
-                if modelsByPrimaryKey.count + cachedQueries.count <= entryLimit { return }
-                
+            private static func prune(_ s: inout State, entryLimit: Int) {
+                if s.modelsByPrimaryKey.count + s.cachedQueries.count <= entryLimit { return }
+
                 // As a table hits its entry limit, to avoid running the expensive pruning operation after EVERY addition,
                 //  we prune the cache to HALF of its size limit to give it some headroom until the next prune is needed.
                 let pruneToEntryLimit = entryLimit / 2
-                
+
                 if pruneToEntryLimit < 1 {
-                    modelsByPrimaryKey.removeAll()
-                    cachedQueries.removeAll()
+                    s.modelsByPrimaryKey.removeAll()
+                    s.cachedQueries.removeAll()
                     return
                 }
 
                 var accessTimes: [CacheEntry.AccessTime] = []
-                for (_, entry) in modelsByPrimaryKey { accessTimes.append(entry.lastAccessed) }
-                for (_, entry) in cachedQueries      { accessTimes.append(entry.lastAccessed) }
+                for (_, entry) in s.modelsByPrimaryKey { accessTimes.append(entry.lastAccessed) }
+                for (_, entry) in s.cachedQueries      { accessTimes.append(entry.lastAccessed) }
                 accessTimes.sort(by: >)
-                
+
                 let evictionCount = accessTimes.count - pruneToEntryLimit
                 guard evictionCount > 0 else { return }
                 let accessTimeThreshold = accessTimes[pruneToEntryLimit]
-                modelsByPrimaryKey = modelsByPrimaryKey.filter { (key, value) in value.lastAccessed > accessTimeThreshold }
-                cachedQueries      = cachedQueries.filter      { (key, value) in value.lastAccessed > accessTimeThreshold }
-                evictions += evictionCount
+                s.modelsByPrimaryKey = s.modelsByPrimaryKey.filter { (_, value) in value.lastAccessed > accessTimeThreshold }
+                s.cachedQueries      = s.cachedQueries.filter      { (_, value) in value.lastAccessed > accessTimeThreshold }
+                s.evictions += evictionCount
             }
-            
+
             func invalidate(primaryKeyValue: Blackbird.Value? = nil) {
-                lock.lock()
-                defer { lock.unlock() }
+                state.withLock { s in
+                    if let primaryKeyValue {
+                        if nil != s.modelsByPrimaryKey.removeValue(forKey: primaryKeyValue) {
+                            s.rowInvalidations += 1
+                        }
+                    } else {
+                        if !s.modelsByPrimaryKey.isEmpty {
+                            s.modelsByPrimaryKey.removeAll()
+                            s.tableInvalidations += 1
+                        }
+                    }
 
-                if let primaryKeyValue {
-                    if nil != modelsByPrimaryKey.removeValue(forKey: primaryKeyValue) {
-                        rowInvalidations += 1
+                    if !s.cachedQueries.isEmpty {
+                        s.cachedQueries.removeAll()
+                        s.queryInvalidations += 1
                     }
-                } else {
-                    if !modelsByPrimaryKey.isEmpty {
-                        modelsByPrimaryKey.removeAll()
-                        tableInvalidations += 1
-                    }
-                }
-                
-                if !cachedQueries.isEmpty {
-                    cachedQueries.removeAll()
-                    queryInvalidations += 1
                 }
             }
-            
+
             func flushForLowMemory() {
-                lock.lock()
-                defer { lock.unlock() }
-
-                modelsByPrimaryKey.removeAll(keepingCapacity: false)
-                cachedQueries.removeAll(keepingCapacity: false)
-                lowMemoryFlushes += 1
+                state.withLock { s in
+                    s.modelsByPrimaryKey.removeAll(keepingCapacity: false)
+                    s.cachedQueries.removeAll(keepingCapacity: false)
+                    s.lowMemoryFlushes += 1
+                }
             }
-            
+
             func resetPerformanceMetrics() {
-                lock.lock()
-                defer { lock.unlock() }
-
-                hits = 0
-                misses = 0
-                writes = 0
-                evictions = 0
-                rowInvalidations = 0
-                queryInvalidations = 0
-                tableInvalidations = 0
-                lowMemoryFlushes = 0
+                state.withLock { s in
+                    s.hits = 0
+                    s.misses = 0
+                    s.writes = 0
+                    s.evictions = 0
+                    s.rowInvalidations = 0
+                    s.queryInvalidations = 0
+                    s.tableInvalidations = 0
+                    s.lowMemoryFlushes = 0
+                }
             }
-            
-            func getPerformanceMetrics() -> CachePerformanceMetrics {
-                lock.lock()
-                defer { lock.unlock() }
 
-                return CachePerformanceMetrics(hits: hits, misses: misses, writes: writes, rowInvalidations: rowInvalidations, queryInvalidations: queryInvalidations, tableInvalidations: tableInvalidations, evictions: evictions, lowMemoryFlushes: lowMemoryFlushes)
+            func getPerformanceMetrics() -> CachePerformanceMetrics {
+                state.withLock { s in
+                    CachePerformanceMetrics(hits: s.hits, misses: s.misses, writes: s.writes, rowInvalidations: s.rowInvalidations, queryInvalidations: s.queryInvalidations, tableInvalidations: s.tableInvalidations, evictions: s.evictions, lowMemoryFlushes: s.lowMemoryFlushes)
+                }
             }
         }
     
-        private let entriesByTableName = Blackbird.Locked<[String: TableCache]>([:])
+        private let entriesByTableName = Mutex<[String: TableCache]>([:])
     
         internal func invalidate(tableName: String? = nil, primaryKeyValue: Blackbird.Value? = nil) {
             entriesByTableName.withLock {

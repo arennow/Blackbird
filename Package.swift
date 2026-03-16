@@ -25,7 +25,7 @@ let package = Package(
                 "AsyncExtensions"
             ],
             swiftSettings: [
-//                .enableExperimentalFeature("StrictConcurrency"),  // Uncomment for Sendable testing
+                .enableExperimentalFeature("StrictConcurrency"),
             ]
         ),
         .testTarget(

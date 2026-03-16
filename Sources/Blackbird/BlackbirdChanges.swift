@@ -33,6 +33,7 @@
 
 import AsyncExtensions
 import Foundation
+import Synchronization
 @preconcurrency import Combine
 
 public extension Blackbird {
@@ -171,131 +172,131 @@ extension Blackbird.Database {
     /// > - Changes may be over-reported.
     public func changeSequence(for tableName: String) -> Blackbird.ChangeSequence { changeReporter.changeSequence(for: tableName) }
 
-    internal final class ChangeReporter: @unchecked Sendable /* unchecked due to use of internal locking */ {
-        internal final class AccumulatedChanges {
+    internal final class ChangeReporter: Sendable {
+        internal struct AccumulatedChanges {
             var primaryKeys: Blackbird.PrimaryKeyValues? = Blackbird.PrimaryKeyValues()
             var columnNames: Blackbird.ColumnNames? = Blackbird.ColumnNames()
             static func entireTableChange(columnsIfKnown: Blackbird.ColumnNames? = nil) -> Self {
-                let s = Self.init()
-                s.primaryKeys = nil
-                s.columnNames = columnsIfKnown
-                return s
+                Self(primaryKeys: nil, columnNames: columnsIfKnown)
             }
         }
     
-        private let lock = Blackbird.Lock()
-        private var activeTransactions = Set<Int64>()
-        private var ignoreWritesToTableName: String? = nil
-        private var bufferRowIDsForIgnoredTable = false
-        private var bufferedRowIDsForIgnoredTable = Set<Int64>()
-        
-        private var accumulatedChangesByTable: [String: AccumulatedChanges] = [:]
-        private var tableChangeSubjects: [String: AsyncPassthroughSubject<Blackbird.Change>] = [:]
-        
-        private var debugPrintEveryReportedChange = false
-        
-        private var cache: Blackbird.Database.Cache
-        
-        internal var numChangesReportedByUpdateHook: UInt64 = 0
-        
+        private struct State {
+            var activeTransactions = Set<Int64>()
+            var ignoreWritesToTableName: String? = nil
+            var bufferRowIDsForIgnoredTable = false
+            var bufferedRowIDsForIgnoredTable = Set<Int64>()
+            var accumulatedChangesByTable: [String: AccumulatedChanges] = [:]
+            var tableChangeSubjects: [String: AsyncPassthroughSubject<Blackbird.Change>] = [:]
+        }
+
+        private let state = Mutex(State())
+        private let debugPrintEveryReportedChange: Bool
+        private let cache: Blackbird.Database.Cache
+        private let _numChangesReportedByUpdateHook = Atomic<UInt64>(0)
+
+        internal var numChangesReportedByUpdateHook: UInt64 {
+            _numChangesReportedByUpdateHook.load(ordering: .relaxed)
+        }
+
+        internal func incrementUpdateHookCount() {
+            _numChangesReportedByUpdateHook.wrappingAdd(1, ordering: .relaxed)
+        }
+
         init(options: Options, cache: Blackbird.Database.Cache) {
             debugPrintEveryReportedChange = options.contains(.debugPrintEveryReportedChange)
             self.cache = cache
         }
 
         internal func changeSequence(for tableName: String) -> Blackbird.ChangeSequence {
-            lock.withLock {
-                if let existing = tableChangeSubjects[tableName] { return existing }
+            state.withLock { s in
+                if let existing = s.tableChangeSubjects[tableName] { return existing }
                 let new = AsyncPassthroughSubject<Blackbird.Change>()
-                tableChangeSubjects[tableName] = new
+                s.tableChangeSubjects[tableName] = new
                 return new
             }
         }
 
         internal func ignoreWritesToTable(_ name: String, beginBufferingRowIDs: Bool = false) {
-            lock.lock()
-            ignoreWritesToTableName = name
-            bufferRowIDsForIgnoredTable = beginBufferingRowIDs
-            bufferedRowIDsForIgnoredTable.removeAll()
-            lock.unlock()
+            state.withLock { s in
+                s.ignoreWritesToTableName = name
+                s.bufferRowIDsForIgnoredTable = beginBufferingRowIDs
+                s.bufferedRowIDsForIgnoredTable.removeAll()
+            }
         }
 
         @discardableResult
         internal func stopIgnoringWrites() -> Set<Int64> {
-            lock.lock()
-            ignoreWritesToTableName = nil
-            bufferRowIDsForIgnoredTable = false
-            let rowIDs = bufferedRowIDsForIgnoredTable
-            bufferedRowIDsForIgnoredTable.removeAll()
-            lock.unlock()
-            return rowIDs
+            state.withLock { s in
+                s.ignoreWritesToTableName = nil
+                s.bufferRowIDsForIgnoredTable = false
+                let rowIDs = s.bufferedRowIDsForIgnoredTable
+                s.bufferedRowIDsForIgnoredTable.removeAll()
+                return rowIDs
+            }
         }
 
         internal func beginTransaction(_ transactionID: Int64) {
-            lock.lock()
-            activeTransactions.insert(transactionID)
-            lock.unlock()
+            state.withLock { _ = $0.activeTransactions.insert(transactionID) }
         }
 
         internal func endTransaction(_ transactionID: Int64) {
-            lock.lock()
-            activeTransactions.remove(transactionID)
-            let needsFlush = activeTransactions.isEmpty && !accumulatedChangesByTable.isEmpty
-            lock.unlock()
+            let needsFlush = state.withLock { s in
+                _ = s.activeTransactions.remove(transactionID)
+                return s.activeTransactions.isEmpty && !s.accumulatedChangesByTable.isEmpty
+            }
             if needsFlush { flush() }
         }
-        
+
         internal func reportEntireDatabaseChange() {
             if debugPrintEveryReportedChange { print("[Blackbird.ChangeReporter] ⚠️ database changed externally, reporting changes to all tables!") }
-            
             cache.invalidate()
 
-            lock.lock()
-            for tableName in tableChangeSubjects.keys { accumulatedChangesByTable[tableName] = AccumulatedChanges.entireTableChange() }
-            let needsFlush = activeTransactions.isEmpty
-            lock.unlock()
+            let needsFlush = state.withLock { s in
+                for tableName in s.tableChangeSubjects.keys { s.accumulatedChangesByTable[tableName] = AccumulatedChanges.entireTableChange() }
+                return s.activeTransactions.isEmpty
+            }
             if needsFlush { flush() }
         }
 
         internal func reportChange(tableName: String, primaryKeys: [[Blackbird.Value]]? = nil, rowID: Int64? = nil, changedColumns: Blackbird.ColumnNames?) {
-            lock.lock()
-            let needsFlush: Bool
-            if tableName == ignoreWritesToTableName {
-                if let rowID, bufferRowIDsForIgnoredTable { bufferedRowIDsForIgnoredTable.insert(rowID) }
-                needsFlush = false
-            } else {
-                if let primaryKeys, !primaryKeys.isEmpty {
-                    if accumulatedChangesByTable[tableName] == nil { accumulatedChangesByTable[tableName] = AccumulatedChanges() }
-                    accumulatedChangesByTable[tableName]!.primaryKeys?.formUnion(primaryKeys)
-                    
-                    if let changedColumns {
-                        accumulatedChangesByTable[tableName]!.columnNames?.formUnion(changedColumns)
-                    } else {
-                        accumulatedChangesByTable[tableName]!.columnNames = nil
-                    }
-                    
-                    for primaryKey in primaryKeys {
-                        if primaryKey.count == 1 { cache.invalidate(tableName: tableName, primaryKeyValue: primaryKey.first) }
-                        else { cache.invalidate(tableName: tableName) }
-                    }
+            let needsFlush = state.withLock { s in
+                if tableName == s.ignoreWritesToTableName {
+                    if let rowID, s.bufferRowIDsForIgnoredTable { _ = s.bufferedRowIDsForIgnoredTable.insert(rowID) }
+                    return false
                 } else {
-                    accumulatedChangesByTable[tableName] = AccumulatedChanges.entireTableChange(columnsIfKnown: changedColumns)
-                    cache.invalidate(tableName: tableName)
-                }
+                    if let primaryKeys, !primaryKeys.isEmpty {
+                        if s.accumulatedChangesByTable[tableName] == nil { s.accumulatedChangesByTable[tableName] = AccumulatedChanges() }
+                        s.accumulatedChangesByTable[tableName]!.primaryKeys?.formUnion(primaryKeys)
 
-                needsFlush = activeTransactions.isEmpty
+                        if let changedColumns {
+                            s.accumulatedChangesByTable[tableName]!.columnNames?.formUnion(changedColumns)
+                        } else {
+                            s.accumulatedChangesByTable[tableName]!.columnNames = nil
+                        }
+
+                        for primaryKey in primaryKeys {
+                            if primaryKey.count == 1 { cache.invalidate(tableName: tableName, primaryKeyValue: primaryKey.first) }
+                            else { cache.invalidate(tableName: tableName) }
+                        }
+                    } else {
+                        s.accumulatedChangesByTable[tableName] = AccumulatedChanges.entireTableChange(columnsIfKnown: changedColumns)
+                        cache.invalidate(tableName: tableName)
+                    }
+
+                    return s.activeTransactions.isEmpty
+                }
             }
-            lock.unlock()
             if needsFlush { flush() }
         }
-        
+
         private func flush() {
-            lock.lock()
-            let subjects = tableChangeSubjects
-            let changesByTable = accumulatedChangesByTable
-            accumulatedChangesByTable.removeAll()
-            lock.unlock()
-            
+            let (subjects, changesByTable) = state.withLock { s in
+                let result = (s.tableChangeSubjects, s.accumulatedChangesByTable)
+                s.accumulatedChangesByTable.removeAll()
+                return result
+            }
+
             for (tableName, accumulatedChanges) in changesByTable {
                 if let keys = accumulatedChanges.primaryKeys {
                     if debugPrintEveryReportedChange {
@@ -340,7 +341,7 @@ extension Blackbird {
             fileprivate var tableChangeMonitoringTask: Task<Void, Never>? = nil
         }
         
-        private let config = Locked(State())
+        private let config = Mutex(State())
         
         public init(initialValue: T? = nil) {
             valuePublisher = CurrentValueSubject<T?, Never>(initialValue)
@@ -362,7 +363,7 @@ extension Blackbird {
         }
         
         private func update(_ cachedResults: T?) async throws {
-            let state = config.value
+            let state = config.withLock { $0 }
             let results: T?
             if let cachedResults = state.cachedResults {
                 results = cachedResults
