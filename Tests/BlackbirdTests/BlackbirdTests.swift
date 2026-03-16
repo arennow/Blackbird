@@ -33,6 +33,7 @@
 
 import XCTest
 @testable import Blackbird
+import Semaphore
 
 func AssertNoThrowAsync(_ action: @autoclosure (() async throws -> Void)) async {
     do {
@@ -1106,7 +1107,7 @@ final class BlackbirdTestTests: XCTestCase, @unchecked Sendable {
     // To test bug #25: https://github.com/marcoarment/Blackbird/issues/25
     func testConcurrentTransactions() async throws {
         let db = try Blackbird.Database(path: sqliteFilename)
-        let semaphore = Blackbird.Semaphore(value: 0)
+        let semaphore = AsyncSemaphore(value: 0)
         
         let numTasks = 1000
         

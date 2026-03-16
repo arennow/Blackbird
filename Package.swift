@@ -17,12 +17,14 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/sideeffect-io/AsyncExtensions.git", .upToNextMajor(from: "0.5.3")),
+        .package(url: "https://github.com/groue/Semaphore.git", .upToNextMajor(from: "0.0.4")),
     ],
     targets: [
         .target(
             name: "Blackbird",
             dependencies: [
-                "AsyncExtensions"
+                "AsyncExtensions",
+                "Semaphore",
             ],
             swiftSettings: [
                 .enableExperimentalFeature("StrictConcurrency"),
@@ -30,7 +32,10 @@ let package = Package(
         ),
         .testTarget(
             name: "BlackbirdTests",
-            dependencies: ["Blackbird"]),
+            dependencies: [
+				"Blackbird",
+				"Semaphore",
+				]),
     ],
     swiftLanguageModes: [.v5]
 )

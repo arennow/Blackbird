@@ -34,6 +34,7 @@
 import Foundation
 import Synchronization
 import SQLite3
+import Semaphore
 
 extension Blackbird {
     public enum TransactionResult<R: Sendable>: Sendable {
@@ -605,7 +606,7 @@ extension Blackbird {
                 }
             }
 
-            private let asyncTransactionSemaphore = Blackbird.Semaphore(value: 1)
+            private let asyncTransactionSemaphore = AsyncSemaphore(value: 1)
 
             // Exactly like the function below, but accepts an async action
             public func cancellableTransaction<R: Sendable>(_ action: (@Sendable (_ core: isolated Blackbird.Database.Core) async throws -> R) ) async throws -> Blackbird.TransactionResult<R> {
