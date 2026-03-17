@@ -31,7 +31,7 @@
 //  SOFTWARE.
 //
 
-extension PartialKeyPath: @unchecked Sendable { }
+extension PartialKeyPath: @retroactive @unchecked Sendable { }
 
 public extension String.StringInterpolation {
     mutating func appendInterpolation<T: BlackbirdModel>(_ keyPath: T.BlackbirdColumnKeyPath) {
@@ -969,7 +969,7 @@ public func / <T: BlackbirdModel> (lhs: T.BlackbirdColumnKeyPath, rhs: Sendable)
 public func + <T: BlackbirdModel> (lhs: T.BlackbirdColumnKeyPath, rhs: Sendable) -> BlackbirdColumnExpression<T> { .add(keyPath: lhs, value: rhs) }
 public func - <T: BlackbirdModel> (lhs: T.BlackbirdColumnKeyPath, rhs: Sendable) -> BlackbirdColumnExpression<T> { .subtract(keyPath: lhs, value: rhs) }
 
-public enum BlackbirdColumnExpression<T: BlackbirdModel>: ExpressibleByFloatLiteral, ExpressibleByStringLiteral, ExpressibleByBooleanLiteral, ExpressibleByIntegerLiteral, ExpressibleByNilLiteral {
+public enum BlackbirdColumnExpression<T: BlackbirdModel>: Sendable, ExpressibleByFloatLiteral, ExpressibleByStringLiteral, ExpressibleByBooleanLiteral, ExpressibleByIntegerLiteral, ExpressibleByNilLiteral {
 
     public init(nilLiteral: ()) { self = .value(nil) }
     public init(stringLiteral value: StaticString) { self = .value(value) }
