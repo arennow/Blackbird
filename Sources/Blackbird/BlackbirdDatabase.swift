@@ -497,7 +497,7 @@ extension Blackbird {
         /// An actor for protected concurrent access to a database.
         public actor Core: BlackbirdQueryable {
             private struct PreparedStatement {
-                let handle: OpaquePointer
+                let handle: SQLiteStatementHandle
                 let isReadOnly: Bool
             }
         
@@ -533,7 +533,7 @@ extension Blackbird {
 
             deinit {
                 if !isClosed {
-                    for (_, statement) in cachedStatements { sqlite3_finalize(statement.handle) }
+                    for (_, statement) in cachedStatements { sqlite3_finalize(statement.handle.pointer) }
                     sqlite3_close(dbHandle.pointer)
                     isClosed = true
                 }
@@ -543,7 +543,7 @@ extension Blackbird {
                 if isClosed { return }
                 let spState = perfLog.begin(signpost: .closeDatabase)
                 defer { perfLog.end(state: spState) }
-                for (_, statement) in cachedStatements { sqlite3_finalize(statement.handle) }
+                for (_, statement) in cachedStatements { sqlite3_finalize(statement.handle.pointer) }
                 sqlite3_close(dbHandle.pointer)
                 isClosed = true
             }
@@ -742,7 +742,7 @@ extension Blackbird {
             public func query(_ query: String, arguments: [Sendable]) throws -> [Blackbird.Row] {
                 if isClosed { throw Error.databaseIsClosed }
                 let statement = try preparedStatement(query)
-                let statementHandle = statement.handle
+                let statementHandle = statement.handle.pointer
                 var idx = 1 // SQLite bind-parameter indexes start at 1, not 0!
                 for any in arguments {
                     let value = try Value.fromAny(any)
@@ -759,7 +759,7 @@ extension Blackbird {
             public func query(_ query: String, arguments: [String: Sendable]) throws -> [Blackbird.Row] {
                 if isClosed { throw Error.databaseIsClosed }
                 let statement = try preparedStatement(query)
-                let statementHandle = statement.handle
+                let statementHandle = statement.handle.pointer
                 for (name, any) in arguments {
                     let value = try Value.fromAny(any)
                     try value.bind(database: self, statement: statementHandle, name: name, for: query)
@@ -776,20 +776,20 @@ extension Blackbird {
                 let result = sqlite3_prepare_v3(dbHandle.pointer, query, -1, UInt32(SQLITE_PREPARE_PERSISTENT), &statementHandle, nil)
                 guard result == SQLITE_OK, let statementHandle else { throw Error.queryError(query: query, description: errorDesc(dbHandle)) }
                 
-                let statement = PreparedStatement(handle: statementHandle, isReadOnly: sqlite3_stmt_readonly(statementHandle) > 0)
+                let statement = PreparedStatement(handle: SQLiteStatementHandle(statementHandle), isReadOnly: sqlite3_stmt_readonly(statementHandle) > 0)
                 cachedStatements[query] = statement
                 return statement
             }
             
             private func rowsByExecutingPreparedStatement(_ statement: PreparedStatement, from query: String) throws -> [Blackbird.Row] {
                 if debugPrintEveryQuery {
-                    if debugPrintQueryParameterValues, let cStr = sqlite3_expanded_sql(statement.handle), let expandedQuery = String(cString: cStr, encoding: .utf8) {
+                    if debugPrintQueryParameterValues, let cStr = sqlite3_expanded_sql(statement.handle.pointer), let expandedQuery = String(cString: cStr, encoding: .utf8) {
                         print("[Blackbird.Database] \(expandedQuery)")
                     } else {
                         print("[Blackbird.Database] \(query)")
                     }
                 }
-                let statementHandle = statement.handle
+                let statementHandle = statement.handle.pointer
 
                 let spState = perfLog.begin(signpost: .rowsByPreparedFunc, message: query)
                 defer { perfLog.end(state: spState) }

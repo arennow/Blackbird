@@ -41,3 +41,15 @@ struct SQLiteDBHandle: @unchecked Sendable {
     let pointer: OpaquePointer
     init(_ pointer: OpaquePointer) { self.pointer = pointer }
 }
+
+/// A wrapper around a raw SQLite prepared-statement handle (`OpaquePointer`).
+///
+/// Declared `@unchecked Sendable` for the same reason as `SQLiteDBHandle`: prepared-statement
+/// handles derived from a `SQLITE_OPEN_NOMUTEX` connection are safe to pass across isolation
+/// boundaries when access is externally serialized. In this codebase that serialization is
+/// provided by the `Database.Core` actor, which is the *only* context that ever holds or uses
+/// a `PreparedStatement` (and therefore this wrapper).
+struct SQLiteStatementHandle: @unchecked Sendable {
+    let pointer: OpaquePointer
+    init(_ pointer: OpaquePointer) { self.pointer = pointer }
+}
