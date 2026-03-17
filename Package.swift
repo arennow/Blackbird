@@ -26,9 +26,6 @@ let package = Package(
                 "AsyncExtensions",
                 "Semaphore",
             ],
-            swiftSettings: [
-                .enableExperimentalFeature("StrictConcurrency"),
-            ]
         ),
         .testTarget(
             name: "BlackbirdTests",
@@ -36,10 +33,6 @@ let package = Package(
 				"Blackbird",
 				"Semaphore",
 				],
-	            swiftSettings: [
-	                .enableExperimentalFeature("StrictConcurrency"),
-	            ]
-				),
-    ],
-    swiftLanguageModes: [.v5]
+		),
+	],
 )
