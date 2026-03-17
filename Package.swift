@@ -35,7 +35,11 @@ let package = Package(
             dependencies: [
 				"Blackbird",
 				"Semaphore",
-				]),
+				],
+	            swiftSettings: [
+	                .enableExperimentalFeature("StrictConcurrency"),
+	            ]
+				),
     ],
     swiftLanguageModes: [.v5]
 )

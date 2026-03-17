@@ -1125,8 +1125,7 @@ final class BlackbirdTestTests: XCTestCase, @unchecked Sendable {
     }
     
     func testCache() async throws {
-        TestModel.cacheLimit = 10000
-
+        try await CacheLimitScope(testModel: 10000).run {
         let db = try Blackbird.Database(path: sqliteFilename)
 
         // big block of writes to populate the DB
@@ -1200,19 +1199,19 @@ final class BlackbirdTestTests: XCTestCase, @unchecked Sendable {
         XCTAssert(db.cachePerformanceMetricsByTableName()[TestModel.tableName]!.queryInvalidations == 1)
         XCTAssert(db.cachePerformanceMetricsByTableName()[TestModel.tableName]!.rowInvalidations == 0)
         XCTAssert(db.cachePerformanceMetricsByTableName()[TestModel.tableName]!.tableInvalidations == 0)
+        }
     }
     
     func testCacheSpeed() async throws {
         let cacheEnabled = true
-
-        TestModel.cacheLimit = cacheEnabled ? 10000 : 0
-        TestModelWithDescription.cacheLimit = TestModel.cacheLimit
+        try await CacheLimitScope(testModel: cacheEnabled ? 10000 : 0).run {
         let startTime = Date()
         try await testQueries()
         try await testHeavyWorkload()
         try await testChangeNotifications()
         let duration = abs(startTime.timeIntervalSinceNow)
         print("took \(duration) seconds")
+        }
     
 //        measure {
 //            let exp = expectation(description: "Finished")
