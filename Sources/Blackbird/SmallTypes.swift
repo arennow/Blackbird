@@ -31,3 +31,13 @@ final class Box<Wrapped: ~Copyable> {
 }
 
 extension Box: Sendable where Wrapped: Sendable {}
+
+/// A wrapper around the raw SQLite database connection handle (`OpaquePointer`).
+///
+/// Declared `@unchecked Sendable` because SQLite connections opened with `SQLITE_OPEN_NOMUTEX`
+/// are safe to pass across isolation boundaries when access is externally serialized — in this
+/// codebase, that serialization is provided by the `Database.Core` actor.
+struct SQLiteDBHandle: @unchecked Sendable {
+    let pointer: OpaquePointer
+    init(_ pointer: OpaquePointer) { self.pointer = pointer }
+}

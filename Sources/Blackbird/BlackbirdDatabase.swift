@@ -424,7 +424,7 @@ extension Blackbird {
                 fileChangeMonitor = nil
             }
 
-            core = Core(handle, changeReporter: changeReporter, cache: cache, fileChangeMonitor: fileChangeMonitor, options: options)
+            core = Core(SQLiteDBHandle(handle), changeReporter: changeReporter, cache: cache, fileChangeMonitor: fileChangeMonitor, options: options)
             perfLog = performanceLog
             
             sqlite3_update_hook(handle, { ctx, operation, dbName, tableName, rowid in
@@ -504,7 +504,7 @@ extension Blackbird {
             private var debugPrintEveryQuery = false
             private var debugPrintQueryParameterValues = false
 
-            internal var dbHandle: OpaquePointer
+            internal var dbHandle: SQLiteDBHandle
             private weak var changeReporter: ChangeReporter?
             private weak var fileChangeMonitor: FileChangeMonitor?
             private weak var cache: Cache?
@@ -517,7 +517,7 @@ extension Blackbird {
 
             private var perfLog = PerformanceLogger(subsystem: Blackbird.loggingSubsystem, category: "Database.Core")
 
-            internal init(_ dbHandle: OpaquePointer, changeReporter: ChangeReporter?, cache: Cache?, fileChangeMonitor: FileChangeMonitor?, options: Database.Options) {
+            internal init(_ dbHandle: SQLiteDBHandle, changeReporter: ChangeReporter?, cache: Cache?, fileChangeMonitor: FileChangeMonitor?, options: Database.Options) {
                 self.dbHandle = dbHandle
                 self.changeReporter = changeReporter
                 self.fileChangeMonitor = fileChangeMonitor
@@ -525,7 +525,7 @@ extension Blackbird {
                 self.debugPrintEveryQuery = options.contains(.debugPrintEveryQuery)
                 self.debugPrintQueryParameterValues = options.contains(.debugPrintQueryParameterValues)
                 
-                if options.contains(.monitorForExternalChanges), SQLITE_OK == sqlite3_prepare_v3(dbHandle, "PRAGMA data_version", -1, UInt32(SQLITE_PREPARE_PERSISTENT), &dataVersionStmt, nil) {
+                if options.contains(.monitorForExternalChanges), SQLITE_OK == sqlite3_prepare_v3(dbHandle.pointer, "PRAGMA data_version", -1, UInt32(SQLITE_PREPARE_PERSISTENT), &dataVersionStmt, nil) {
                     if SQLITE_ROW == sqlite3_step(dataVersionStmt) { previousDataVersion = sqlite3_column_int64(dataVersionStmt, 0) }
                     sqlite3_reset(dataVersionStmt)
                 }
@@ -534,7 +534,7 @@ extension Blackbird {
             deinit {
                 if !isClosed {
                     for (_, statement) in cachedStatements { sqlite3_finalize(statement.handle) }
-                    sqlite3_close(dbHandle)
+                    sqlite3_close(dbHandle.pointer)
                     isClosed = true
                 }
             }
@@ -544,7 +544,7 @@ extension Blackbird {
                 let spState = perfLog.begin(signpost: .closeDatabase)
                 defer { perfLog.end(state: spState) }
                 for (_, statement) in cachedStatements { sqlite3_finalize(statement.handle) }
-                sqlite3_close(dbHandle)
+                sqlite3_close(dbHandle.pointer)
                 isClosed = true
             }
             
@@ -556,9 +556,9 @@ extension Blackbird {
             internal var changeCount: Int64 {
                 get {
                     if #available(macOS 12.3, iOS 15.4, tvOS 15.4, watchOS 8.5, *) {
-                        return Int64(sqlite3_total_changes64(dbHandle))
+                        return Int64(sqlite3_total_changes64(dbHandle.pointer))
                     } else {
-                        return Int64(sqlite3_total_changes(dbHandle))
+                        return Int64(sqlite3_total_changes(dbHandle.pointer))
                     }
                 }
             }
@@ -695,17 +695,17 @@ extension Blackbird {
                 }
                 
                 try _checkForUpdateHookBypass {
-                    let result = sqlite3_exec(dbHandle, query, nil, nil, nil)
+                    let result = sqlite3_exec(dbHandle.pointer, query, nil, nil, nil)
                     if result != SQLITE_OK { throw Error.queryError(query: query, description: errorDesc(dbHandle)) }
                 }
             }
             
-            nonisolated internal func errorDesc(_ dbHandle: OpaquePointer?, _ query: String? = nil) -> String {
+            nonisolated internal func errorDesc(_ dbHandle: SQLiteDBHandle?, _ query: String? = nil) -> String {
                 guard let dbHandle else { return "No SQLite handle" }
-                let code = sqlite3_errcode(dbHandle)
-                let msg = String(cString: sqlite3_errmsg(dbHandle), encoding: .utf8) ?? "(unknown)"
+                let code = sqlite3_errcode(dbHandle.pointer)
+                let msg = String(cString: sqlite3_errmsg(dbHandle.pointer), encoding: .utf8) ?? "(unknown)"
 
-                if #available(iOS 16, watchOS 9, macOS 13, tvOS 16, *), case let offset = sqlite3_error_offset(dbHandle), offset >= 0 {
+                if #available(iOS 16, watchOS 9, macOS 13, tvOS 16, *), case let offset = sqlite3_error_offset(dbHandle.pointer), offset >= 0 {
                     return "SQLite error code \(code) at index \(offset): \(msg)"
                 } else {
                     return "SQLite error code \(code): \(msg)"
@@ -773,7 +773,7 @@ extension Blackbird {
             private func preparedStatement(_ query: String) throws -> PreparedStatement {
                 if let cached = cachedStatements[query] { return cached }
                 var statementHandle: OpaquePointer? = nil
-                let result = sqlite3_prepare_v3(dbHandle, query, -1, UInt32(SQLITE_PREPARE_PERSISTENT), &statementHandle, nil)
+                let result = sqlite3_prepare_v3(dbHandle.pointer, query, -1, UInt32(SQLITE_PREPARE_PERSISTENT), &statementHandle, nil)
                 guard result == SQLITE_OK, let statementHandle else { throw Error.queryError(query: query, description: errorDesc(dbHandle)) }
                 
                 let statement = PreparedStatement(handle: statementHandle, isReadOnly: sqlite3_stmt_readonly(statementHandle) > 0)
@@ -877,24 +877,25 @@ extension Blackbird {
                     throw Blackbird.Database.Error.backupError(description: "File already exists at `\(targetPath)`")
                 }
                 
-                var targetDbHandle: OpaquePointer? = nil
+                var rawTargetHandle: OpaquePointer? = nil
                 let flags: Int32 = SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE
-                let openResult = sqlite3_open_v2(targetPath, &targetDbHandle, flags, nil)
+                let openResult = sqlite3_open_v2(targetPath, &rawTargetHandle, flags, nil)
 
-                guard let targetDbHandle else {
+                guard let rawTargetHandle else {
                     throw Error.cannotOpenDatabaseAtPath(path: targetPath, description: "SQLite cannot allocate memory")
                 }
+                let targetDbHandle = SQLiteDBHandle(rawTargetHandle)
 
-                defer { sqlite3_close(targetDbHandle) }
+                defer { sqlite3_close(targetDbHandle.pointer) }
 
                 guard openResult == SQLITE_OK else {
-                    let code = sqlite3_errcode(targetDbHandle)
-                    let msg = String(cString: sqlite3_errmsg(targetDbHandle), encoding: .utf8) ?? "(unknown)"
-                    sqlite3_close(targetDbHandle)
+                    let code = sqlite3_errcode(targetDbHandle.pointer)
+                    let msg = String(cString: sqlite3_errmsg(targetDbHandle.pointer), encoding: .utf8) ?? "(unknown)"
+                    sqlite3_close(targetDbHandle.pointer)
                     throw Error.cannotOpenDatabaseAtPath(path: targetPath, description: "SQLite error code \(code): \(msg)")
                 }
 
-                guard let backup = sqlite3_backup_init(targetDbHandle, "main", dbHandle, "main") else {
+                guard let backup = sqlite3_backup_init(targetDbHandle.pointer, "main", dbHandle.pointer, "main") else {
                     throw Blackbird.Database.Error.backupError(description: errorDesc(targetDbHandle))
                 }
                 
