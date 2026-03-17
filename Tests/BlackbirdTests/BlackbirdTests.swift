@@ -31,38 +31,20 @@
 //  SOFTWARE.
 //
 
-import XCTest
+import Foundation
+import Testing
 @testable import Blackbird
 import Semaphore
 
-func AssertNoThrowAsync(_ action: @autoclosure (() async throws -> Void)) async {
-    do {
-        try await action()
-    } catch {
-        XCTAssert(false, "Call threw error: \(error)")
-    }
-}
-
-func AssertThrowsErrorAsync(_ action: @autoclosure (() async throws -> Void)) async {
-    do {
-        try await action()
-        XCTAssert(false, "Call was expected to throw")
-    } catch { }
-}
-
-final class BlackbirdTestTests: XCTestCase, @unchecked Sendable {
-    enum Error: Swift.Error {
-        case testError
-    }
-
+final class BlackbirdTests: @unchecked Sendable {
     var sqliteFilename = ""
 
-    override func setUpWithError() throws {
+    init() throws {
         let dir = FileManager.default.temporaryDirectory.path
         sqliteFilename = "\(dir)/test\(Int64.random(in: 0..<Int64.max)).sqlite"
     }
 
-    override func tearDownWithError() throws {
+    deinit {
         if sqliteFilename != "", sqliteFilename != ":memory:", FileManager.default.fileExists(atPath: sqliteFilename) {
             for path in Blackbird.Database.allFilePaths(for: sqliteFilename) {
                 try? FileManager.default.removeItem(atPath: path)
@@ -70,86 +52,84 @@ final class BlackbirdTestTests: XCTestCase, @unchecked Sendable {
         }
     }
 
-    // Use XCTAssert and related functions to verify your tests produce the correct results.
-    // Any test you write for XCTest can be annotated as throws and async.
-    // Mark your test throws to produce an unexpected failure when your test encounters an uncaught error.
-    // Mark your test async to allow awaiting for asynchronous code to complete. Check the results with assertions afterwards.
+    @Test
+    func valueConversions() throws {
+        let n = try #require(Blackbird.Value.fromSQLiteLiteral("NULL"))
+        #expect(n == .null)
+        #expect(n.intValue == nil)
+        #expect(n.doubleValue == nil)
+        #expect(n.stringValue == nil)
+        #expect(n.dataValue == nil)
+        #expect((try Blackbird.Value.fromAny(nil)) == n)
+        #expect((try Blackbird.Value.fromAny(NSNull())) == n)
 
-    func testValueConversions() throws {
-        guard let n = Blackbird.Value.fromSQLiteLiteral("NULL") else { throw Error.testError }
-        XCTAssert(n == .null)
-        XCTAssert(n.intValue == nil)
-        XCTAssert(n.doubleValue == nil)
-        XCTAssert(n.stringValue == nil)
-        XCTAssert(n.dataValue == nil)
-        XCTAssert((try Blackbird.Value.fromAny(nil)) == n)
-        XCTAssert((try Blackbird.Value.fromAny(NSNull())) == n)
+        let i = try #require(Blackbird.Value.fromSQLiteLiteral("123456"))
+        #expect(i == .integer(123456))
+        #expect(i.intValue == 123456)
+        #expect(i.doubleValue == 123456.0)
+        #expect(i.stringValue == "123456")
+        #expect(i.dataValue == "123456".data(using: .utf8))
+        #expect((try Blackbird.Value.fromAny(123456)) == i)
+        #expect((try Blackbird.Value.fromAny(Int(123456))) == i)
+        #expect((try Blackbird.Value.fromAny(Int8(123))) == .integer(123))
+        #expect((try Blackbird.Value.fromAny(Int16(12345))) == .integer(12345))
+        #expect((try Blackbird.Value.fromAny(Int32(123456))) == i)
+        #expect((try Blackbird.Value.fromAny(Int64(123456))) == i)
+        #expect((try Blackbird.Value.fromAny(UInt8(123))) == .integer(123))
+        #expect((try Blackbird.Value.fromAny(UInt16(12345))) == .integer(12345))
+        #expect((try Blackbird.Value.fromAny(UInt32(123456))) == i)
+        #expect(throws: (any Swift.Error).self) { _ = try Blackbird.Value.fromAny(UInt(123456)) }
+        #expect(throws: (any Swift.Error).self) { _ = try Blackbird.Value.fromAny(UInt64(123456)) }
+        #expect((try Blackbird.Value.fromAny(false)) == .integer(0))
+        #expect((try Blackbird.Value.fromAny(true)) == .integer(1))
 
-        guard let i = Blackbird.Value.fromSQLiteLiteral("123456") else { throw Error.testError }
-        XCTAssert(i == .integer(123456))
-        XCTAssert(i.intValue == 123456)
-        XCTAssert(i.doubleValue == 123456.0)
-        XCTAssert(i.stringValue == "123456")
-        XCTAssert(i.dataValue == "123456".data(using: .utf8))
-        XCTAssert((try Blackbird.Value.fromAny(123456)) == i)
-        XCTAssert((try Blackbird.Value.fromAny(Int(123456))) == i)
-        XCTAssert((try Blackbird.Value.fromAny(Int8(123))) == .integer(123))
-        XCTAssert((try Blackbird.Value.fromAny(Int16(12345))) == .integer(12345))
-        XCTAssert((try Blackbird.Value.fromAny(Int32(123456))) == i)
-        XCTAssert((try Blackbird.Value.fromAny(Int64(123456))) == i)
-        XCTAssert((try Blackbird.Value.fromAny(UInt8(123))) == .integer(123))
-        XCTAssert((try Blackbird.Value.fromAny(UInt16(12345))) == .integer(12345))
-        XCTAssert((try Blackbird.Value.fromAny(UInt32(123456))) == i)
-        XCTAssertThrowsError(try Blackbird.Value.fromAny(UInt(123456)))
-        XCTAssertThrowsError(try Blackbird.Value.fromAny(UInt64(123456)))
-        XCTAssert((try Blackbird.Value.fromAny(false)) == .integer(0))
-        XCTAssert((try Blackbird.Value.fromAny(true)) == .integer(1))
+        let d = try #require(Blackbird.Value.fromSQLiteLiteral("123456.789"))
+        #expect(d == .double(123456.789))
+        #expect(d.intValue == 123456)
+        #expect(d.doubleValue == 123456.789)
+        #expect(d.stringValue == "123456.789")
+        #expect(d.dataValue == "123456.789".data(using: .utf8))
+        #expect((try Blackbird.Value.fromAny(123456.789)) == d)
+        #expect((try Blackbird.Value.fromAny(Float(123456.789))) == .double(123456.7890625))
+        #expect((try Blackbird.Value.fromAny(Double(123456.789))) == d)
 
-        guard let d = Blackbird.Value.fromSQLiteLiteral("123456.789") else { throw Error.testError }
-        XCTAssert(d == .double(123456.789))
-        XCTAssert(d.intValue == 123456)
-        XCTAssert(d.doubleValue == 123456.789)
-        XCTAssert(d.stringValue == "123456.789")
-        XCTAssert(d.dataValue == "123456.789".data(using: .utf8))
-        XCTAssert((try Blackbird.Value.fromAny(123456.789)) == d)
-        XCTAssert((try Blackbird.Value.fromAny(Float(123456.789))) == .double(123456.7890625))
-        XCTAssert((try Blackbird.Value.fromAny(Double(123456.789))) == d)
+        let s = try #require(Blackbird.Value.fromSQLiteLiteral("'abc\"🌊\"d''éƒ'''"))
+        #expect(s == .text("abc\"🌊\"d'éƒ'"))
+        #expect(s.intValue == nil)
+        #expect(s.doubleValue == nil)
+        #expect(s.stringValue == "abc\"🌊\"d'éƒ'")
+        #expect(s.dataValue == "abc\"🌊\"d'éƒ'".data(using: .utf8)!)
+        #expect((try Blackbird.Value.fromAny("abc\"🌊\"d'éƒ'")) == s)
 
-        guard let s = Blackbird.Value.fromSQLiteLiteral("'abc\"🌊\"d''éƒ'''") else { throw Error.testError }
-        XCTAssert(s == .text("abc\"🌊\"d'éƒ'"))
-        XCTAssert(s.intValue == nil)
-        XCTAssert(s.doubleValue == nil)
-        XCTAssert(s.stringValue == "abc\"🌊\"d'éƒ'")
-        XCTAssert(s.dataValue == "abc\"🌊\"d'éƒ'".data(using: .utf8)!)
-        XCTAssert((try Blackbird.Value.fromAny("abc\"🌊\"d'éƒ'")) == s)
-    
-        guard let b = Blackbird.Value.fromSQLiteLiteral("X\'616263F09F8C8A64C3A9C692\'") else { throw Error.testError }
-        XCTAssert(b == .data("abc🌊déƒ".data(using: .utf8)!))
-        XCTAssert(b.intValue == nil)
-        XCTAssert(b.doubleValue == nil)
-        XCTAssert(b.stringValue == "abc🌊déƒ")
-        XCTAssert(b.dataValue == "abc🌊déƒ".data(using: .utf8))
-        XCTAssert((try Blackbird.Value.fromAny("abc🌊déƒ".data(using: .utf8)!)) == b)
+        let b = try #require(Blackbird.Value.fromSQLiteLiteral("X\'616263F09F8C8A64C3A9C692\'"))
+        #expect(b == .data("abc🌊déƒ".data(using: .utf8)!))
+        #expect(b.intValue == nil)
+        #expect(b.doubleValue == nil)
+        #expect(b.stringValue == "abc🌊déƒ")
+        #expect(b.dataValue == "abc🌊déƒ".data(using: .utf8))
+        #expect((try Blackbird.Value.fromAny("abc🌊déƒ".data(using: .utf8)!)) == b)
 
         let date = Date()
-        XCTAssert((try Blackbird.Value.fromAny(date)) == .double(date.timeIntervalSince1970))
-        
+        #expect((try Blackbird.Value.fromAny(date)) == .double(date.timeIntervalSince1970))
+
         let url = URL(string: "https://www.marco.org/")!
-        XCTAssert((try Blackbird.Value.fromAny(url)) == .text(url.absoluteString))
+        #expect((try Blackbird.Value.fromAny(url)) == .text(url.absoluteString))
     }
 
-    func testOpenDB() async throws {
+    @Test
+    func openDB() async throws {
         let db = try Blackbird.Database(path: sqliteFilename, options: [.debugPrintEveryQuery, .debugPrintEveryReportedChange])
         try await TestModel.resolveSchema(in: db)
         try await SchemaChangeAddColumnsInitial.resolveSchema(in: db)
         try await SchemaChangeRebuildTableInitial.resolveSchema(in: db)
         await db.close()
     }
-    
-    func testWhereIdIN() async throws {
+
+    @Test
+    func whereIdIN() async throws {
         let db = try Blackbird.Database(path: sqliteFilename)
         let count = min(TestData.URLs.count, TestData.titles.count, TestData.descriptions.count)
-        
+
         try await db.transaction { core in
             for i in 0..<count {
                 let m = TestModelWithDescription(id: i, url: TestData.URLs[i], title: TestData.titles[i], description: TestData.descriptions[i])
@@ -161,63 +141,64 @@ final class BlackbirdTestTests: XCTestCase, @unchecked Sendable {
         var giantIDBatch = Array(0...(db.maxQueryVariableCount * 2))
         giantIDBatch.shuffle()
         let all = try await TestModelWithDescription.read(from: db, primaryKeys: giantIDBatch)
-        XCTAssert(all.count == count)
+        #expect(all.count == count)
         db.debugPrintCachePerformanceMetrics()
-        
+
         var idSet = Set<Int>()
         for m in all { idSet.insert(m.id) }
-        for i in 0..<count { XCTAssert(idSet.contains(i)) }
-        
+        for i in 0..<count { #expect(idSet.contains(i)) }
+
         let pkOrder = [ 999, 1, 78, 128, 63, 100000, 571 ]
         let sorted = try await TestModelWithDescription.read(from: db, primaryKeys: pkOrder, preserveOrder: true)
-        XCTAssert(sorted[0].id == 999);
-        XCTAssert(sorted[1].id == 1);
-        XCTAssert(sorted[2].id == 78);
-        XCTAssert(sorted[3].id == 128);
-        XCTAssert(sorted[4].id == 63);
-        XCTAssert(sorted[5].id == 571);
-        
+        #expect(sorted[0].id == 999)
+        #expect(sorted[1].id == 1)
+        #expect(sorted[2].id == 78)
+        #expect(sorted[3].id == 128)
+        #expect(sorted[4].id == 63)
+        #expect(sorted[5].id == 571)
+
         db.debugPrintCachePerformanceMetrics()
     }
-    
-    func testQueries() async throws {
+
+    @Test
+    func queries() async throws {
         let allFilenames = Blackbird.Database.allFilePaths(for: sqliteFilename)
         print("SQLite filenames:\n\(allFilenames.joined(separator: "\n"))")
-    
+
         let db = try Blackbird.Database(path: sqliteFilename, options: [.debugPrintEveryQuery, .debugPrintQueryParameterValues, .debugPrintEveryReportedChange])
         let count = min(TestData.URLs.count, TestData.titles.count, TestData.descriptions.count)
-        
+
         try await db.transaction { core in
             for i in 0..<count {
                 let m = TestModelWithDescription(id: i, url: TestData.URLs[i], title: TestData.titles[i], description: TestData.descriptions[i])
                 try m.writeIsolated(to: db, core: core)
             }
         }
-        
+
         for i: Int64 in 1..<10 {
             try await MulticolumnPrimaryKeyTest(userID: i, feedID: i, episodeID: i).write(to: db)
         }
-        
+
         let countReturned = try await TestModelWithDescription.count(in: db)
-        XCTAssert(countReturned == 1000)
+        #expect(countReturned == 1000)
 
         let countReturnedMatching = try await TestModelWithDescription.count(in: db, matching: \.$id >= 500)
-        XCTAssert(countReturnedMatching == 500)
+        #expect(countReturnedMatching == 500)
 
         let the = try await TestModelWithDescription.read(from: db, sqlWhere: "title LIKE 'the%'")
-        XCTAssert(the.count == 231)
+        #expect(the.count == 231)
 
         let paramFormat1Results = try await TestModelWithDescription.read(from: db, sqlWhere: "title LIKE ?", "the%")
-        XCTAssert(paramFormat1Results.count == 231)
+        #expect(paramFormat1Results.count == 231)
 
         let paramFormat2Results = try await TestModelWithDescription.read(from: db, sqlWhere: "title LIKE ?", arguments: ["the%"])
-        XCTAssert(paramFormat2Results.count == 231)
+        #expect(paramFormat2Results.count == 231)
 
         let paramFormat3Results = try await TestModelWithDescription.read(from: db, sqlWhere: "title LIKE :title", arguments: [":title" : "the%"])
-        XCTAssert(paramFormat3Results.count == 231)
+        #expect(paramFormat3Results.count == 231)
 
         let paramFormat4Results = try await TestModelWithDescription.read(from: db, sqlWhere: "\(\TestModelWithDescription.$title) LIKE :title", arguments: [":title" : "the%"])
-        XCTAssert(paramFormat4Results.count == 231)
+        #expect(paramFormat4Results.count == 231)
 
         // Structured queries
         let first100 =  try await TestModelWithDescription.read(from: db, orderBy: .ascending(\.$id), limit: 100)
@@ -231,193 +212,194 @@ final class BlackbirdTestTests: XCTestCase, @unchecked Sendable {
         let matches0f = try await TestModelWithDescription.read(from: db, matching: .like(\.$title, "% % % % %"))
         let matches0g = try await TestModelWithDescription.read(from: db, matching: !.valueIn(\.$id, [1, 2, 3]))
 
-        XCTAssert(first100.count == 100)
-        XCTAssert(first100.first!.id == 0)
-        XCTAssert(first100.last!.id == 99)
-        XCTAssert(matches0a1.count == 1)
-        XCTAssert(matches0a1.first!.id == 123)
-        XCTAssert(matches0a2 != nil)
-        XCTAssert(matches0a2!.id == 123)
-        XCTAssert(matches0a3 != nil)
-        XCTAssert(matches0a3![\.$title] == matches0a2!.title)
-        XCTAssert(matches0b.count == 997)
-        XCTAssert(matches0c.count == 1000)
-        XCTAssert(matches0d.count == 3)
-        XCTAssert(matches0e.count == 231)
-        XCTAssert(matches0f.count == 235)
-        XCTAssert(matches0g.count == 997)
+        #expect(first100.count == 100)
+        #expect(first100.first!.id == 0)
+        #expect(first100.last!.id == 99)
+        #expect(matches0a1.count == 1)
+        #expect(matches0a1.first!.id == 123)
+        #expect(matches0a2 != nil)
+        #expect(matches0a2!.id == 123)
+        #expect(matches0a3 != nil)
+        #expect(matches0a3![\.$title] == matches0a2!.title)
+        #expect(matches0b.count == 997)
+        #expect(matches0c.count == 1000)
+        #expect(matches0d.count == 3)
+        #expect(matches0e.count == 231)
+        #expect(matches0f.count == 235)
+        #expect(matches0g.count == 997)
 
         try await MulticolumnPrimaryKeyTest.update(in: db, set: [\.$episodeID: 5], forMulticolumnPrimaryKeys: [[1, 1, 1], [2, 2, 2], [3, 1, 1]])
         let multiID1 = try await MulticolumnPrimaryKeyTest.read(from: db, multicolumnPrimaryKey: [1, 1, 5])
         let multiID2 = try await MulticolumnPrimaryKeyTest.read(from: db, multicolumnPrimaryKey: [2, 2, 5])
         let multiID2b = try await MulticolumnPrimaryKeyTest.query(in: db, columns: [\.$userID], multicolumnPrimaryKey: [2, 2, 5])
         let multiID3 = try await MulticolumnPrimaryKeyTest.read(from: db, multicolumnPrimaryKey: [3, 3, 5])
-        XCTAssert(multiID1!.episodeID == 5)
-        XCTAssert(multiID2!.episodeID == 5)
-        XCTAssert(multiID3 == nil)
-        XCTAssert(multiID2b != nil)
-        XCTAssert(multiID2b![\.$userID] == multiID2!.userID)
+        #expect(multiID1!.episodeID == 5)
+        #expect(multiID2!.episodeID == 5)
+        #expect(multiID3 == nil)
+        #expect(multiID2b != nil)
+        #expect(multiID2b![\.$userID] == multiID2!.userID)
 
         try await TestModelWithDescription.update(in: db, set: [\.$title: "(new)"], forPrimaryKeys: [1, 2, 3])
         let id1 = try await TestModelWithDescription.read(from: db, id: 1)
         let id2 = try await TestModelWithDescription.read(from: db, id: 2)
         let id3 = try await TestModelWithDescription.read(from: db, id: 3)
-        XCTAssert(id1!.title == "(new)")
-        XCTAssert(id2!.title == "(new)")
-        XCTAssert(id3!.title == "(new)")
+        #expect(id1!.title == "(new)")
+        #expect(id2!.title == "(new)")
+        #expect(id3!.title == "(new)")
 
         var id42 = try await TestModelWithDescription.read(from: db, id: 42)
-        XCTAssertNotNil(id42)
-        XCTAssert(id42!.id == 42)
-        
+        #expect(id42 != nil)
+        #expect(id42!.id == 42)
+
         id42?.url = nil
         try await id42?.write(to: db)
-        
+
         try await id42!.delete(from: db)
         let id42AfterDelete = try await TestModelWithDescription.read(from: db, id: 42)
-        XCTAssertNil(id42AfterDelete)
-        
+        #expect(id42AfterDelete == nil)
+
         let id43 = try await TestModelWithDescription.read(from: db, matching: \.$id == 43).first
-        XCTAssertNotNil(id43)
-        XCTAssertNotNil(id43!.id == 43)
+        #expect(id43 != nil)
+        #expect(id43!.id == 43)
         try await TestModelWithDescription.delete(from: db, matching: \.$id == 43)
         let id43AfterDelete = try await TestModelWithDescription.read(from: db, matching: \.$id == 43).first
-        XCTAssertNil(id43AfterDelete)
-        
+        #expect(id43AfterDelete == nil)
+
         let matches1 = try await TestModelWithDescription.read(from: db, orderBy: .descending(\.$title), .ascending(\.$id), limit: 1)
-        XCTAssert(matches1.first!.title == "the memory palace")
+        #expect(matches1.first!.title == "the memory palace")
 
         let matches = try await TestModelWithDescription.read(from: db, matching: \.$title == "Omnibus")
-        XCTAssert(matches.count == 1)
-        XCTAssert(matches.first!.title == "Omnibus")
-        
+        #expect(matches.count == 1)
+        #expect(matches.first!.title == "Omnibus")
+
         let rows = try await TestModelWithDescription.query(in: db, columns: [\.$id, \.$title, \.$url], matching: \.$title == "Omnibus")
-        XCTAssert(rows.count == 1)
-        XCTAssert(rows.first!.count == 3)
+        #expect(rows.count == 1)
+        #expect(rows.first!.count == 3)
 
         let omnibusID = rows.first![\.$id]
         let title = rows.first![\.$title]
         let url = rows.first![\.$url]
-        XCTAssert(title == "Omnibus")
-        XCTAssert(url != nil)
+        #expect(title == "Omnibus")
+        #expect(url != nil)
 
-        try await TestModelWithDescription.update(in: db,set: [ \.$url: nil ], matching: \.$id == omnibusID)
+        try await TestModelWithDescription.update(in: db, set: [ \.$url: nil ], matching: \.$id == omnibusID)
 
         let rowsWithNilURL = try await TestModelWithDescription.query(in: db, columns: [\.$id, \.$url], matching: \.$url == nil)
         let id = rowsWithNilURL.first![\.$id]
         let nilURL = rowsWithNilURL.first![\.$url]
-        XCTAssert(id == omnibusID)
-        XCTAssert(nilURL == nil)
-        
+        #expect(id == omnibusID)
+        #expect(nilURL == nil)
+
         try await TestModelWithDescription.delete(from: db, matching: \.$url == nil)
         let leftovers1 = try await TestModelWithDescription.read(from: db, matching: \.$url == nil)
         let leftovers2 = try await TestModelWithDescription.read(from: db, matching: \.$id == omnibusID)
-        XCTAssert(leftovers1.isEmpty)
-        XCTAssert(leftovers2.isEmpty)
+        #expect(leftovers1.isEmpty)
+        #expect(leftovers2.isEmpty)
 
         db.debugPrintCachePerformanceMetrics()
     }
-    
-    func testUpdateExpressions() async throws {
+
+    @Test
+    func updateExpressions() async throws {
         let db = try Blackbird.Database(path: sqliteFilename, options: [.debugPrintEveryQuery, .debugPrintEveryReportedChange, .debugPrintQueryParameterValues])
 
         try await TestModelForUpdateExpressions(id: 1, i: 1, d: 1.5).write(to: db)
         try await TestModelForUpdateExpressions(id: 2, i: 2, d: 2.5).write(to: db)
         try await TestModelForUpdateExpressions(id: 3, i: 3, d: 3.5).write(to: db)
-        
-//        try await TestModelForUpdateExpressions.update(in: db, set: [\.$i : BlackbirdUpdateExpression.addInteger(100) ], matching: \.$id == 1)
 
         try await TestModelForUpdateExpressions.update(in: db, set: [\.$i : \.$i + 100 ], matching: \.$id == 1)
 
         let testModel1 = try await TestModelForUpdateExpressions.read(from: db, id: 1)
         let testModel2 = try await TestModelForUpdateExpressions.read(from: db, id: 2)
         let testModel3 = try await TestModelForUpdateExpressions.read(from: db, id: 3)
-        
-        XCTAssert(testModel1!.id == 1)
-        XCTAssert(testModel1!.i == 101)
-        XCTAssert(testModel2!.id == 2)
-        XCTAssert(testModel2!.i == 2)
-        XCTAssert(testModel3!.id == 3)
-        XCTAssert(testModel3!.i == 3)
+
+        #expect(testModel1!.id == 1)
+        #expect(testModel1!.i == 101)
+        #expect(testModel2!.id == 2)
+        #expect(testModel2!.i == 2)
+        #expect(testModel3!.id == 3)
+        #expect(testModel3!.i == 3)
 
         try await TestModelForUpdateExpressions.update(in: db, set: [\.$d : \.$i + 10 ], matching: \.$id == 2)
 
         let a = try await TestModelForUpdateExpressions.read(from: db, id: 2)
-        XCTAssert(a!.i == 2)
-        XCTAssert(a!.d == 12)
+        #expect(a!.i == 2)
+        #expect(a!.d == 12)
 
         try await TestModelForUpdateExpressions.update(in: db, set: [\.$i : !\.$i], matching: \.$id == 2)
         let a2 = try await TestModelForUpdateExpressions.read(from: db, id: 2)
-        XCTAssert(a2!.i == 0)
+        #expect(a2!.i == 0)
 
         try await TestModelForUpdateExpressions.update(in: db, set: [\.$i : !\.$i], matching: \.$id == 2)
         let a3 = try await TestModelForUpdateExpressions.read(from: db, id: 2)
-        XCTAssert(a3!.i == 1)
+        #expect(a3!.i == 1)
 
         try await TestModelForUpdateExpressions.update(in: db, set: [
             \.$d : 5.5,
             \.$i : \.$i * 10,
         ], matching: \.$id == 2)
         let a4 = try await TestModelForUpdateExpressions.read(from: db, id: 2)
-        XCTAssert(a4!.i == 10)
-        XCTAssert(a4!.d == 5.5)
+        #expect(a4!.i == 10)
+        #expect(a4!.d == 5.5)
     }
 
-    func testColumnTypes() async throws {
+    @Test
+    func columnTypes() async throws {
         let db = try Blackbird.Database(path: sqliteFilename, options: [.debugPrintEveryQuery, .debugPrintEveryReportedChange, .debugPrintQueryParameterValues])
         try await TypeTest.resolveSchema(in: db)
-        
+
         let now = Date()
-        
+
         let tt = TypeTest(id: Int64.max, typeIntNull: nil, typeIntNotNull: Int64.min, typeTextNull: nil, typeTextNotNull: "textNotNull!", typeDoubleNull: nil, typeDoubleNotNull: Double.pi, typeDataNull: nil, typeDataNotNull: "dataNotNull!".data(using: .utf8)!, typeIntEnum: .two, typeIntEnumNullWithValue: .one, typeStringEnum: .one, typeStringEnumNullWithValue: .two, typeIntNonZeroEnum: .two, typeIntNonZeroEnumNullWithValue: .two, typeStringNonEmptyEnum: .one, typeStringNonEmptyEnumNullWithValue: .two, typeURLNull: nil, typeURLNotNull: URL(string: "https://marco.org/")!, typeDateNull: nil, typeDateNotNull: now)
         try await tt.write(to: db)
-        
+
         let read = try await TypeTest.read(from: db, id: Int64.max)
-        XCTAssertNotNil(read)
-        XCTAssert(read!.id == Int64.max)
-        XCTAssert(read!.typeIntNull == nil)
-        XCTAssert(read!.typeIntNotNull == Int64.min)
-        XCTAssert(read!.typeTextNull == nil)
-        XCTAssert(read!.typeTextNotNull == "textNotNull!")
-        XCTAssert(read!.typeDoubleNull == nil)
-        XCTAssert(read!.typeDoubleNotNull == Double.pi)
-        XCTAssert(read!.typeDataNull == nil)
-        XCTAssert(read!.typeDataNotNull == "dataNotNull!".data(using: .utf8)!)
-        XCTAssert(read!.typeIntEnum == .two)
-        XCTAssert(read!.typeIntEnumNull == nil)
-        XCTAssert(read!.typeIntEnumNullWithValue == .one)
-        XCTAssert(read!.typeStringEnum == .one)
-        XCTAssert(read!.typeStringEnumNull == nil)
-        XCTAssert(read!.typeStringEnumNullWithValue == .two)
-        XCTAssert(read!.typeIntNonZeroEnum == .two)
-        XCTAssert(read!.typeIntNonZeroEnumWithDefault == .one)
-        XCTAssert(read!.typeIntNonZeroEnumNull == nil)
-        XCTAssert(read!.typeIntNonZeroEnumNullWithValue == .two)
-        XCTAssert(read!.typeStringNonEmptyEnum == .one)
-        XCTAssert(read!.typeStringNonEmptyEnumWithDefault == .two)
-        XCTAssert(read!.typeStringNonEmptyEnumNull == nil)
-        XCTAssert(read!.typeStringNonEmptyEnumNullWithValue == .two)
-        XCTAssert(read!.typeURLNull == nil)
-        XCTAssert(read!.typeURLNotNull == URL(string: "https://marco.org/")!)
-        XCTAssert(read!.typeDateNull == nil)
-        XCTAssert(read!.typeDateNotNull.timeIntervalSince1970 == now.timeIntervalSince1970)
-        
+        #expect(read != nil)
+        #expect(read!.id == Int64.max)
+        #expect(read!.typeIntNull == nil)
+        #expect(read!.typeIntNotNull == Int64.min)
+        #expect(read!.typeTextNull == nil)
+        #expect(read!.typeTextNotNull == "textNotNull!")
+        #expect(read!.typeDoubleNull == nil)
+        #expect(read!.typeDoubleNotNull == Double.pi)
+        #expect(read!.typeDataNull == nil)
+        #expect(read!.typeDataNotNull == "dataNotNull!".data(using: .utf8)!)
+        #expect(read!.typeIntEnum == .two)
+        #expect(read!.typeIntEnumNull == nil)
+        #expect(read!.typeIntEnumNullWithValue == .one)
+        #expect(read!.typeStringEnum == .one)
+        #expect(read!.typeStringEnumNull == nil)
+        #expect(read!.typeStringEnumNullWithValue == .two)
+        #expect(read!.typeIntNonZeroEnum == .two)
+        #expect(read!.typeIntNonZeroEnumWithDefault == .one)
+        #expect(read!.typeIntNonZeroEnumNull == nil)
+        #expect(read!.typeIntNonZeroEnumNullWithValue == .two)
+        #expect(read!.typeStringNonEmptyEnum == .one)
+        #expect(read!.typeStringNonEmptyEnumWithDefault == .two)
+        #expect(read!.typeStringNonEmptyEnumNull == nil)
+        #expect(read!.typeStringNonEmptyEnumNullWithValue == .two)
+        #expect(read!.typeURLNull == nil)
+        #expect(read!.typeURLNotNull == URL(string: "https://marco.org/")!)
+        #expect(read!.typeDateNull == nil)
+        #expect(read!.typeDateNotNull.timeIntervalSince1970 == now.timeIntervalSince1970)
+
         let results1 = try await TypeTest.read(from: db, sqlWhere: "typeIntEnum = ?", TypeTest.RepresentableIntEnum.one)
-        XCTAssert(results1.count == 0)
+        #expect(results1.count == 0)
 
         let results2 = try await TypeTest.read(from: db, sqlWhere: "typeIntEnum = ?", TypeTest.RepresentableIntEnum.two)
-        XCTAssert(results2.count == 1)
-        XCTAssert(results2.first!.id == Int64.max)
+        #expect(results2.count == 1)
+        #expect(results2.first!.id == Int64.max)
 
         let results3 = try await TypeTest.read(from: db, sqlWhere: "typeStringEnum = ?", TypeTest.RepresentableStringEnum.two)
-        XCTAssert(results3.count == 0)
+        #expect(results3.count == 0)
 
         let results4 = try await TypeTest.read(from: db, sqlWhere: "typeStringEnum = ?", TypeTest.RepresentableStringEnum.one)
-        XCTAssert(results4.count == 1)
-        XCTAssert(results4.first!.id == Int64.max)
+        #expect(results4.count == 1)
+        #expect(results4.first!.id == Int64.max)
     }
 
-    func testJSONSerialization() async throws {
+    @Test
+    func jsonSerialization() async throws {
         let db = try Blackbird.Database(path: sqliteFilename, options: [.debugPrintEveryQuery, .debugPrintEveryReportedChange])
         let count = min(TestData.URLs.count, TestData.titles.count, TestData.descriptions.count)
         try await db.transaction { core in
@@ -428,8 +410,8 @@ final class BlackbirdTestTests: XCTestCase, @unchecked Sendable {
         }
 
         let the = try await TestModelWithDescription.read(from: db, sqlWhere: "title LIKE 'the%'")
-        XCTAssert(the.count == 231)
-        
+        #expect(the.count == 231)
+
         let results = [
             TestModel(id: 1, title: TestData.randomTitle, url: TestData.randomURL, nonColumn: TestData.randomString(length: 4)),
             TestModel(id: 2, title: TestData.randomTitle, url: TestData.randomURL, nonColumn: TestData.randomString(length: 4)),
@@ -440,23 +422,32 @@ final class BlackbirdTestTests: XCTestCase, @unchecked Sendable {
         let encoder = JSONEncoder()
         let json = try encoder.encode(results)
         print("json: \(String(data: json, encoding: .utf8)!)")
-        
+
         let decoder = JSONDecoder()
         let decoded = try decoder.decode([TestModel].self, from: json)
-        XCTAssert(decoded == results)
-        
+        #expect(decoded == results)
+
         for i in 0..<3 {
             let m1 = results[i]
             let m2 = decoded[i]
-            XCTAssert(m1.id == m2.id)
-            XCTAssert(m1.title == m2.title)
-            XCTAssert(m1.url == m2.url)
-            XCTAssert(m1.nonColumn == m2.nonColumn)
+            #expect(m1.id == m2.id)
+            #expect(m1.title == m2.title)
+            #expect(m1.url == m2.url)
+            #expect(m1.nonColumn == m2.nonColumn)
         }
     }
 
+    @Test
+    func multiStatements() async throws {
+        let db = try Blackbird.Database(path: sqliteFilename, options: [.debugPrintEveryQuery, .debugPrintEveryReportedChange])
+        try await TestModel.resolveSchema(in: db)
+        try await db.execute("PRAGMA user_version = 234; UPDATE TestModel SET url = NULL")
+        let userVersion = try await db.query("PRAGMA user_version").first?["user_version"]
+        #expect(userVersion != nil)
+        #expect(userVersion!.intValue == 234)
+    }
 
-    func testHeavyWorkload() async throws {
+    private func runHeavyWorkload(sqliteFilename: String) async throws {
         let db = try Blackbird.Database(path: sqliteFilename)
 
         // big block of writes to populate the DB
@@ -486,47 +477,42 @@ final class BlackbirdTestTests: XCTestCase, @unchecked Sendable {
         }
 
         db.debugPrintCachePerformanceMetrics()
-
         await db.close()
     }
 
-    func testMemoryDB() async throws {
-        sqliteFilename = ":memory:"
-        try await testHeavyWorkload()
-    }
-    
-    func testMultiStatements() async throws {
-        let db = try Blackbird.Database(path: sqliteFilename, options: [.debugPrintEveryQuery, .debugPrintEveryReportedChange])
-        try await TestModel.resolveSchema(in: db)
-        try await db.execute("PRAGMA user_version = 234; UPDATE TestModel SET url = NULL")
-        let userVersion = try await db.query("PRAGMA user_version").first?["user_version"]
-        XCTAssert(userVersion != nil)
-        XCTAssert(userVersion!.intValue == 234)
+    @Test
+    func heavyWorkload() async throws {
+        try await runHeavyWorkload(sqliteFilename: sqliteFilename)
     }
 
-    func testTransactionRollback() async throws {
+    @Test
+    func memoryDB() async throws {
+        try await runHeavyWorkload(sqliteFilename: ":memory:")
+    }
+
+    @Test
+    func transactionRollback() async throws {
         let db = try Blackbird.Database(path: sqliteFilename, options: [.debugPrintEveryQuery, .debugPrintEveryReportedChange])
-        
+
         let id = TestData.randomInt64()
         let originalTitle = TestData.randomTitle
         let t = TestModel(id: id, title: originalTitle, url: TestData.randomURL, nonColumn: TestData.randomString(length: 32))
         try await t.write(to: db)
 
         try await db.transaction { core in
-            
         }
 
         let retVal0 = try await db.transaction { core in
             return "test0"
         }
-        XCTAssert(retVal0 == "test0")
+        #expect(retVal0 == "test0")
 
         let retVal1Void = try await db.cancellableTransaction { core in
             throw Blackbird.Error.cancelTransaction
         }
         switch retVal1Void {
-            case .rolledBack: XCTAssert(true)
-            case .committed(_): XCTAssert(false)
+            case .rolledBack: #expect(Bool(true))
+            case .committed(_): Issue.record("Expected rollback")
         }
 
         let cancelTransaction = true
@@ -534,93 +520,96 @@ final class BlackbirdTestTests: XCTestCase, @unchecked Sendable {
             var t = t
             t.title = "new title"
             try t.writeIsolated(to: db, core: core)
-            
+
             let title = try core.query("SELECT title FROM TestModel WHERE id = ?", id).first!["title"]!.stringValue
-            XCTAssert(title == "new title")
-            
+            #expect(title == "new title")
+
             if (cancelTransaction) {
                 throw Blackbird.Error.cancelTransaction
             } else {
                 return "Test"
             }
         }
-        
+
         switch retVal1 {
-            case .rolledBack: XCTAssert(true)
-            case .committed(_): XCTAssert(false)
+            case .rolledBack: #expect(Bool(true))
+            case .committed(_): Issue.record("Expected rollback")
         }
 
         let title = try await db.query("SELECT title FROM TestModel WHERE id = ?", id).first!["title"]!.stringValue
-        XCTAssert(title == originalTitle)
+        #expect(title == originalTitle)
 
         let retVal2 = try await db.cancellableTransaction { core in
             var t = t
             t.title = "new title"
             try t.writeIsolated(to: db, core: core)
-            
+
             let title = try core.query("SELECT title FROM TestModel WHERE id = ?", id).first!["title"]!.stringValue
-            XCTAssert(title == "new title")
-            
+            #expect(title == "new title")
+
             return "Test"
         }
-        
+
         switch retVal2 {
-            case .rolledBack: XCTAssert(false)
-            case .committed(_): XCTAssert(true)
+            case .rolledBack: Issue.record("Expected commit")
+            case .committed(_): #expect(Bool(true))
         }
 
         let title2 = try await db.query("SELECT title FROM TestModel WHERE id = ?", id).first!["title"]!.stringValue
-        XCTAssert(title2 == "new title")
+        #expect(title2 == "new title")
     }
 
-    func testConcurrentAccessToSameDBFile() async throws {
+    @Test
+    func concurrentAccessToSameDBFile() async throws {
         let mem1 = try Blackbird.Database.inMemoryDatabase(options: [.debugPrintEveryQuery, .debugPrintEveryReportedChange])
-        XCTAssertNoThrow(try _ = Blackbird.Database.inMemoryDatabase())
+        #expect(throws: Never.self) { try Blackbird.Database.inMemoryDatabase() }
         try await mem1.execute("PRAGMA user_version = 1") // so mem1 doesn't get deallocated until after this
 
         let db1 = try Blackbird.Database(path: sqliteFilename)
-        XCTAssertThrowsError(try _ = Blackbird.Database(path: sqliteFilename))
+        #expect(throws: (any Swift.Error).self) { try Blackbird.Database(path: self.sqliteFilename) }
         await db1.close()
-        XCTAssertNoThrow(try Blackbird.Database(path: sqliteFilename)) // should be OK to reuse a path after .close()
-    
-        await AssertThrowsErrorAsync(try await db1.execute("PRAGMA user_version = 1")) // so db1 doesn't get deallocated until after this and we test throwing errors for accessing a closed DB
+        #expect(throws: Never.self) { try Blackbird.Database(path: self.sqliteFilename) } // should be OK to reuse a path after .close()
+
+        await #expect(throws: (any Swift.Error).self) { try await db1.execute("PRAGMA user_version = 1") } // test throwing errors for accessing a closed DB
     }
-    
-    func testCodingKeys() async throws {
+
+    @Test
+    func codingKeys() async throws {
         let db = try Blackbird.Database(path: sqliteFilename, options: [.debugPrintEveryQuery, .debugPrintEveryReportedChange])
-        
+
         let id = TestData.randomInt64()
         let title = TestData.randomTitle
         let desc = TestData.randomDescription
-        
+
         let t = TestCodingKeys(id: id, title: title, description: desc)
         try await t.write(to: db)
-        
+
         let readBack = try await TestCodingKeys.read(from: db, id: id)
-        XCTAssertNotNil(readBack)
-        XCTAssert(readBack!.id == id)
-        XCTAssert(readBack!.title == title)
-        XCTAssert(readBack!.description == desc)
-        
+        #expect(readBack != nil)
+        #expect(readBack!.id == id)
+        #expect(readBack!.title == title)
+        #expect(readBack!.description == desc)
+
         let jsonEncoder = JSONEncoder()
         let data = try jsonEncoder.encode(readBack)
         let decoder = JSONDecoder()
         let decoded = try decoder.decode(TestCodingKeys.self, from: data)
-        XCTAssert(decoded.id == id)
-        XCTAssert(decoded.title == title)
-        XCTAssert(decoded.description == desc)
+        #expect(decoded.id == id)
+        #expect(decoded.title == title)
+        #expect(decoded.description == desc)
 
         let custom = try decoder.decode(TestCustomDecoder.self, from: """
             {"idStr":"123","nameStr":"abc","thumbStr":"https://google.com/"}
         """.data(using: .utf8)!)
-        XCTAssert(custom.id == 123)
-        XCTAssert(custom.name == "abc")
-        XCTAssert(custom.thumbnail == URL(string: "https://google.com/")!)
-        
+        #expect(custom.id == 123)
+        #expect(custom.name == "abc")
+        #expect(custom.thumbnail == URL(string: "https://google.com/")!)
+
         try await custom.write(to: db)
     }
 
-    func testSchemaChangeAddPrimaryKeyColumn() async throws {
+    @Test
+    func schemaChangeAddPrimaryKeyColumn() async throws {
         let userID = TestData.randomInt64()
         let feedID = TestData.randomInt64()
         let episodeID = TestData.randomInt64()
@@ -628,191 +617,199 @@ final class BlackbirdTestTests: XCTestCase, @unchecked Sendable {
         var db = try Blackbird.Database(path: sqliteFilename, options: [.debugPrintEveryQuery, .debugPrintEveryReportedChange])
         try await SchemaChangeAddPrimaryKeyColumnInitial(userID: userID, feedID: feedID, subscribed: true).write(to: db)
         await db.close()
-    
+
         db = try Blackbird.Database(path: sqliteFilename, options: [.debugPrintEveryQuery, .debugPrintEveryReportedChange])
         let newInstance = SchemaChangeAddPrimaryKeyColumnChanged(userID: userID, feedID: feedID, episodeID: episodeID, subscribed: false)
         try await newInstance.write(to: db)
-    
+
         let firstInstance = try await SchemaChangeAddPrimaryKeyColumnChanged.read(from: db, multicolumnPrimaryKey: [userID, feedID, 0])
         let secondInstance = try await SchemaChangeAddPrimaryKeyColumnChanged.read(from: db, multicolumnPrimaryKey: [userID, feedID, episodeID])
         let thirdInstance = try await SchemaChangeAddPrimaryKeyColumnChanged.read(from: db, multicolumnPrimaryKey: ["userID" : userID, "feedID" : feedID, "episodeID": episodeID])
 
-        XCTAssertNotNil(firstInstance)
-        XCTAssertNotNil(secondInstance)
-        XCTAssertNotNil(thirdInstance)
-        XCTAssert(firstInstance!.episodeID == 0)
-        XCTAssert(secondInstance!.episodeID == episodeID)
-        XCTAssert(thirdInstance!.episodeID == episodeID)
-        XCTAssert(firstInstance!.subscribed == true)
-        XCTAssert(secondInstance!.subscribed == false)
-        XCTAssert(thirdInstance!.subscribed == false)
+        #expect(firstInstance != nil)
+        #expect(secondInstance != nil)
+        #expect(thirdInstance != nil)
+        #expect(firstInstance!.episodeID == 0)
+        #expect(secondInstance!.episodeID == episodeID)
+        #expect(thirdInstance!.episodeID == episodeID)
+        #expect(firstInstance!.subscribed == true)
+        #expect(secondInstance!.subscribed == false)
+        #expect(thirdInstance!.subscribed == false)
     }
 
-    func testSchemaChangeAddColumns() async throws {
+    @Test
+    func schemaChangeAddColumns() async throws {
         let id = TestData.randomInt64()
         let title = TestData.randomTitle
 
         var db = try Blackbird.Database(path: sqliteFilename, options: [.debugPrintEveryQuery, .debugPrintEveryReportedChange])
         try await SchemaChangeAddColumnsInitial(id: id, title: title).write(to: db)
         await db.close()
-    
+
         db = try Blackbird.Database(path: sqliteFilename, options: [.debugPrintEveryQuery, .debugPrintEveryReportedChange])
         let newInstance = SchemaChangeAddColumnsChanged(id: TestData.randomInt64(not: id), title: TestData.randomTitle, description: "Custom", url: TestData.randomURL, art: TestData.randomData(length: 2048))
         try await newInstance.write(to: db)
-    
+
         let modifiedInstance = try await SchemaChangeAddColumnsChanged.read(from: db, id: id)
-        XCTAssertNotNil(modifiedInstance)
-        XCTAssert(modifiedInstance!.title == title)
+        #expect(modifiedInstance != nil)
+        #expect(modifiedInstance!.title == title)
 
         let readNewInstance = try await SchemaChangeAddColumnsChanged.read(from: db, id: newInstance.id)
-        XCTAssertNotNil(readNewInstance)
-        XCTAssert(readNewInstance!.description == "Custom")
+        #expect(readNewInstance != nil)
+        #expect(readNewInstance!.description == "Custom")
     }
 
-    func testSchemaChangeDropColumns() async throws {
+    @Test
+    func schemaChangeDropColumns() async throws {
         let id = TestData.randomInt64()
         let title = TestData.randomTitle
 
         var db = try Blackbird.Database(path: sqliteFilename, options: [.debugPrintEveryQuery, .debugPrintEveryReportedChange])
         try await SchemaChangeAddColumnsChanged(id: id, title: title, description: "Custom", url: TestData.randomURL, art: TestData.randomData(length: 2048)).write(to: db)
         await db.close()
-    
+
         db = try Blackbird.Database(path: sqliteFilename, options: [.debugPrintEveryQuery, .debugPrintEveryReportedChange])
         let newInstance = SchemaChangeAddColumnsInitial(id: TestData.randomInt64(not: id), title: TestData.randomTitle)
         try await newInstance.write(to: db)
-    
+
         let modifiedInstance = try await SchemaChangeAddColumnsInitial.read(from: db, id: id)
-        XCTAssertNotNil(modifiedInstance)
-        XCTAssert(modifiedInstance!.title == title)
+        #expect(modifiedInstance != nil)
+        #expect(modifiedInstance!.title == title)
     }
 
-    func testSchemaChangeAddIndex() async throws {
+    @Test
+    func schemaChangeAddIndex() async throws {
         let id = TestData.randomInt64()
         let title = TestData.randomTitle
 
         var db = try Blackbird.Database(path: sqliteFilename, options: [.debugPrintEveryQuery, .debugPrintEveryReportedChange])
         try await SchemaChangeAddIndexInitial(id: id, title: title).write(to: db)
         await db.close()
-    
+
         db = try Blackbird.Database(path: sqliteFilename, options: [.debugPrintEveryQuery, .debugPrintEveryReportedChange])
         let newInstance = SchemaChangeAddIndexChanged(id: TestData.randomInt64(not: id), title: TestData.randomTitle)
         try await newInstance.write(to: db)
-    
+
         let modifiedInstance = try await SchemaChangeAddIndexChanged.read(from: db, id: id)
-        XCTAssertNotNil(modifiedInstance)
-        XCTAssert(modifiedInstance!.title == title)
+        #expect(modifiedInstance != nil)
+        #expect(modifiedInstance!.title == title)
     }
 
-    func testSchemaChangeDropIndex() async throws {
+    @Test
+    func schemaChangeDropIndex() async throws {
         let id = TestData.randomInt64()
         let title = TestData.randomTitle
 
         var db = try Blackbird.Database(path: sqliteFilename, options: [.debugPrintEveryQuery, .debugPrintEveryReportedChange])
         try await SchemaChangeAddIndexChanged(id: id, title: title).write(to: db)
         await db.close()
-    
+
         db = try Blackbird.Database(path: sqliteFilename, options: [.debugPrintEveryQuery, .debugPrintEveryReportedChange])
         let newInstance = SchemaChangeAddIndexInitial(id: TestData.randomInt64(not: id), title: TestData.randomTitle)
         try await newInstance.write(to: db)
-    
+
         let modifiedInstance = try await SchemaChangeAddIndexInitial.read(from: db, id: id)
-        XCTAssertNotNil(modifiedInstance)
-        XCTAssert(modifiedInstance!.title == title)
+        #expect(modifiedInstance != nil)
+        #expect(modifiedInstance!.title == title)
     }
 
-    func testSchemaChangeRebuildTable() async throws {
+    @Test
+    func schemaChangeRebuildTable() async throws {
         let id = TestData.randomInt64()
         let title = TestData.randomTitle
 
         var db = try Blackbird.Database(path: sqliteFilename, options: [.debugPrintEveryQuery, .debugPrintEveryReportedChange])
         try await SchemaChangeRebuildTableInitial(id: id, title: title, flags: 15).write(to: db)
         await db.close()
-    
+
         db = try Blackbird.Database(path: sqliteFilename, options: [.debugPrintEveryQuery, .debugPrintEveryReportedChange])
         let newInstance = SchemaChangeRebuildTableChanged(id: TestData.randomInt64(not: id), title: TestData.randomTitle, flags: "{1,0}", description: TestData.randomDescription)
         try await newInstance.write(to: db)
-    
+
         let modifiedInstance = try await SchemaChangeRebuildTableChanged.read(from: db, id: id)
-        XCTAssertNotNil(modifiedInstance)
-        XCTAssert(modifiedInstance!.title == title)
-        XCTAssert(modifiedInstance!.description == "")
-        XCTAssert(modifiedInstance!.flags == "15")
+        #expect(modifiedInstance != nil)
+        #expect(modifiedInstance!.title == title)
+        #expect(modifiedInstance!.description == "")
+        #expect(modifiedInstance!.flags == "15")
     }
-    
-    func testColumnChanges() async throws {
+
+    @Test
+    func columnChanges() async throws {
         let db = try Blackbird.Database(path: sqliteFilename, options: [.debugPrintEveryQuery, .debugPrintEveryReportedChange])
         let db2 = try Blackbird.Database.inMemoryDatabase()
-        
+
         var t = TestModel(id: TestData.randomInt64(), title: "Original Title", url: TestData.randomURL)
-        XCTAssert(t.$id.hasChanged(in: db))
-        XCTAssert(t.$title.hasChanged(in: db))
-        XCTAssert(t.$url.hasChanged(in: db))
-        XCTAssert(t.changedColumns(in: db) == Blackbird.ColumnNames(["id", "title", "url"]))
-        XCTAssert(t.$id.hasChanged(in: db2))
-        XCTAssert(t.$title.hasChanged(in: db2))
-        XCTAssert(t.$url.hasChanged(in: db2))
-        XCTAssert(t.changedColumns(in: db2) == Blackbird.ColumnNames(["id", "title", "url"]))
+        #expect(t.$id.hasChanged(in: db))
+        #expect(t.$title.hasChanged(in: db))
+        #expect(t.$url.hasChanged(in: db))
+        #expect(t.changedColumns(in: db) == Blackbird.ColumnNames(["id", "title", "url"]))
+        #expect(t.$id.hasChanged(in: db2))
+        #expect(t.$title.hasChanged(in: db2))
+        #expect(t.$url.hasChanged(in: db2))
+        #expect(t.changedColumns(in: db2) == Blackbird.ColumnNames(["id", "title", "url"]))
 
         try await t.write(to: db)
 
-        XCTAssert(!t.$id.hasChanged(in: db))
-        XCTAssert(!t.$title.hasChanged(in: db))
-        XCTAssert(!t.$url.hasChanged(in: db))
-        XCTAssert(t.changedColumns(in: db).isEmpty)
-        XCTAssert(t.$id.hasChanged(in: db2))
-        XCTAssert(t.$title.hasChanged(in: db2))
-        XCTAssert(t.$url.hasChanged(in: db2))
-        XCTAssert(t.changedColumns(in: db2) == Blackbird.ColumnNames(["id", "title", "url"]))
-        
+        #expect(!t.$id.hasChanged(in: db))
+        #expect(!t.$title.hasChanged(in: db))
+        #expect(!t.$url.hasChanged(in: db))
+        #expect(t.changedColumns(in: db).isEmpty)
+        #expect(t.$id.hasChanged(in: db2))
+        #expect(t.$title.hasChanged(in: db2))
+        #expect(t.$url.hasChanged(in: db2))
+        #expect(t.changedColumns(in: db2) == Blackbird.ColumnNames(["id", "title", "url"]))
+
         t.title = "Updated Title"
 
-        XCTAssert(!t.$id.hasChanged(in: db))
-        XCTAssert(t.$title.hasChanged(in: db))
-        XCTAssert(!t.$url.hasChanged(in: db))
-        XCTAssert(t.changedColumns(in: db) == Blackbird.ColumnNames(["title"]))
+        #expect(!t.$id.hasChanged(in: db))
+        #expect(t.$title.hasChanged(in: db))
+        #expect(!t.$url.hasChanged(in: db))
+        #expect(t.changedColumns(in: db) == Blackbird.ColumnNames(["title"]))
 
         try await t.write(to: db)
 
-        XCTAssert(!t.$id.hasChanged(in: db))
-        XCTAssert(!t.$title.hasChanged(in: db))
-        XCTAssert(!t.$url.hasChanged(in: db))
-        XCTAssert(t.changedColumns(in: db).isEmpty)
-        
+        #expect(!t.$id.hasChanged(in: db))
+        #expect(!t.$title.hasChanged(in: db))
+        #expect(!t.$url.hasChanged(in: db))
+        #expect(t.changedColumns(in: db).isEmpty)
+
         var t2 = try await TestModel.read(from: db, id: t.id)!
-        XCTAssert(!t2.$id.hasChanged(in: db))
-        XCTAssert(!t2.$title.hasChanged(in: db))
-        XCTAssert(!t2.$url.hasChanged(in: db))
-        XCTAssert(t2.changedColumns(in: db).isEmpty)
-        
+        #expect(!t2.$id.hasChanged(in: db))
+        #expect(!t2.$title.hasChanged(in: db))
+        #expect(!t2.$url.hasChanged(in: db))
+        #expect(t2.changedColumns(in: db).isEmpty)
+
         t2.title = "Third Title"
-        XCTAssert(!t2.$id.hasChanged(in: db))
-        XCTAssert(t2.$title.hasChanged(in: db))
-        XCTAssert(!t2.$url.hasChanged(in: db))
-        XCTAssert(t2.changedColumns(in: db) == Blackbird.ColumnNames(["title"]))
-        
+        #expect(!t2.$id.hasChanged(in: db))
+        #expect(t2.$title.hasChanged(in: db))
+        #expect(!t2.$url.hasChanged(in: db))
+        #expect(t2.changedColumns(in: db) == Blackbird.ColumnNames(["title"]))
+
         try await t2.write(to: db)
 
-        XCTAssert(!t.$id.hasChanged(in: db))
-        XCTAssert(!t.$title.hasChanged(in: db))
-        XCTAssert(!t.$url.hasChanged(in: db))
-        XCTAssert(t.changedColumns(in: db).isEmpty)
+        #expect(!t.$id.hasChanged(in: db))
+        #expect(!t.$title.hasChanged(in: db))
+        #expect(!t.$url.hasChanged(in: db))
+        #expect(t.changedColumns(in: db).isEmpty)
     }
-    
+
     var _testChangeNotificationsExpectedChangedTable: String? = nil
     var _testChangeNotificationsExpectedChangedKeys: Blackbird.PrimaryKeyValues? = nil
     var _testChangeNotificationsExpectedChangedColumnNames: Blackbird.ColumnNames? = nil
     var _testChangeNotificationsListeners: [Task<Void, Never>] = []
     var _testChangeNotificationsCallCount = 0
-    func testChangeNotifications() async throws {
+
+    @Test
+    func changeNotifications() async throws {
         let db = try Blackbird.Database(path: sqliteFilename, options: [.debugPrintEveryQuery, .debugPrintEveryReportedChange, .debugPrintQueryParameterValues])
-        
+
         try await TestModel.resolveSchema(in: db)
         try await TestModelWithDescription.resolveSchema(in: db)
-        
+
         _testChangeNotificationsListeners.append(Task {
             for await change in TestModel.changeSequence(in: db) {
                 if let expectedTable = self._testChangeNotificationsExpectedChangedTable {
-                    XCTAssertEqual(expectedTable, change.type.tableName, "Change listener called for incorrect table")
+                    #expect(expectedTable == change.type.tableName, "Change listener called for incorrect table")
                 }
                 self._testChangeNotificationsCallCount += 1
             }
@@ -821,34 +818,34 @@ final class BlackbirdTestTests: XCTestCase, @unchecked Sendable {
         _testChangeNotificationsListeners.append(Task {
             for await change in TestModelWithDescription.changeSequence(in: db) {
                 if change.primaryKeys == nil {
-                    XCTAssertNil(self._testChangeNotificationsExpectedChangedKeys)
+                    #expect(self._testChangeNotificationsExpectedChangedKeys == nil)
                 } else {
-                    XCTAssertEqual(self._testChangeNotificationsExpectedChangedKeys, change.primaryKeys)
+                    #expect(self._testChangeNotificationsExpectedChangedKeys == change.primaryKeys)
                 }
-                
+
                 if change.columnNames == nil {
-                    XCTAssertNil(self._testChangeNotificationsExpectedChangedColumnNames)
+                    #expect(self._testChangeNotificationsExpectedChangedColumnNames == nil)
                 } else {
-                    XCTAssertEqual(self._testChangeNotificationsExpectedChangedColumnNames, change.columnNames)
+                    #expect(self._testChangeNotificationsExpectedChangedColumnNames == change.columnNames)
                 }
-                
+
                 self._testChangeNotificationsCallCount += 1
             }
         })
-        
+
         var expectedChangeNotificationsCallCount = 0
-        
+
         _testChangeNotificationsExpectedChangedTable = "TestModelWithDescription"
-        
+
         // Batched change notifications
         let count = min(TestData.URLs.count, TestData.titles.count, TestData.descriptions.count)
-        
+
         func megaYield() async {
             for _ in 0..<count {
                 await Task.yield()
             }
         }
-        
+
         try await db.transaction { core in
             var expectedBatchedKeys = Blackbird.PrimaryKeyValues()
             for i in 0..<count {
@@ -861,8 +858,8 @@ final class BlackbirdTestTests: XCTestCase, @unchecked Sendable {
         }
         await megaYield()
         expectedChangeNotificationsCallCount += 1
-        XCTAssert(_testChangeNotificationsCallCount == expectedChangeNotificationsCallCount)
-        
+        #expect(_testChangeNotificationsCallCount == expectedChangeNotificationsCallCount)
+
         // Individual change notifications
         var m = try await TestModelWithDescription.read(from: db, id: 64)!
         m.title = "Edited title!"
@@ -871,7 +868,7 @@ final class BlackbirdTestTests: XCTestCase, @unchecked Sendable {
         try await m.write(to: db)
         await megaYield()
         expectedChangeNotificationsCallCount += 1
-        XCTAssert(_testChangeNotificationsCallCount == expectedChangeNotificationsCallCount)
+        #expect(_testChangeNotificationsCallCount == expectedChangeNotificationsCallCount)
 
         // Unspecified/whole-table change notifications, with structured column info
         _testChangeNotificationsExpectedChangedKeys = Blackbird.PrimaryKeyValues(Array(0..<count).map { [try! Blackbird.Value.fromAny($0)] })
@@ -879,7 +876,7 @@ final class BlackbirdTestTests: XCTestCase, @unchecked Sendable {
         try await TestModelWithDescription.update(in: db, set: [ \.$url : nil ], matching: .all)
         await megaYield()
         expectedChangeNotificationsCallCount += 1
-        XCTAssert(_testChangeNotificationsCallCount == expectedChangeNotificationsCallCount)
+        #expect(_testChangeNotificationsCallCount == expectedChangeNotificationsCallCount)
 
         // Unspecified/whole-table delete notifications, with structured column info
         _testChangeNotificationsExpectedChangedKeys = Blackbird.PrimaryKeyValues(Array(0..<5).map { [try! Blackbird.Value.fromAny($0)] })
@@ -887,7 +884,7 @@ final class BlackbirdTestTests: XCTestCase, @unchecked Sendable {
         try await TestModelWithDescription.delete(from: db, matching: \.$id < 5)
         await megaYield()
         expectedChangeNotificationsCallCount += 1
-        XCTAssert(_testChangeNotificationsCallCount == expectedChangeNotificationsCallCount)
+        #expect(_testChangeNotificationsCallCount == expectedChangeNotificationsCallCount)
 
         // Unspecified/whole-table change notifications, with structured column info and primary keys
         _testChangeNotificationsExpectedChangedKeys = [[7], [8], [9]]
@@ -895,14 +892,14 @@ final class BlackbirdTestTests: XCTestCase, @unchecked Sendable {
         try await TestModelWithDescription.update(in: db, set: [ \.$url : nil ], forPrimaryKeys: [7, 8, 9])
         await megaYield()
         expectedChangeNotificationsCallCount += 1
-        XCTAssert(_testChangeNotificationsCallCount == expectedChangeNotificationsCallCount)
+        #expect(_testChangeNotificationsCallCount == expectedChangeNotificationsCallCount)
 
         // Unspecified/whole-table change notifications, structured, but affecting 0 rows -- no change notification expected
         _testChangeNotificationsExpectedChangedKeys = nil
         _testChangeNotificationsExpectedChangedColumnNames = nil
         try await TestModelWithDescription.update(in: db, set: [ \.$url : nil ], matching: .all)
         await megaYield()
-        XCTAssert(_testChangeNotificationsCallCount == expectedChangeNotificationsCallCount)
+        #expect(_testChangeNotificationsCallCount == expectedChangeNotificationsCallCount)
 
         // Unspecified/whole-table change notifications
         _testChangeNotificationsExpectedChangedKeys = nil
@@ -910,7 +907,7 @@ final class BlackbirdTestTests: XCTestCase, @unchecked Sendable {
         try await TestModelWithDescription.query(in: db, "UPDATE $T SET url = NULL")
         await megaYield()
         expectedChangeNotificationsCallCount += 1
-        XCTAssert(_testChangeNotificationsCallCount == expectedChangeNotificationsCallCount)
+        #expect(_testChangeNotificationsCallCount == expectedChangeNotificationsCallCount)
 
         // Column-name merging
         _testChangeNotificationsExpectedChangedKeys = Blackbird.PrimaryKeyValues([[ .integer(31) ], [ .integer(32) ]])
@@ -920,13 +917,13 @@ final class BlackbirdTestTests: XCTestCase, @unchecked Sendable {
             t1.title = "Edited title!"
             var t2 = try TestModelWithDescription.readIsolated(from: db, core: core, id: 32)!
             t2.description = "Edited description!"
-            
+
             try t1.writeIsolated(to: db, core: core)
             try t2.writeIsolated(to: db, core: core)
         }
         await megaYield()
         expectedChangeNotificationsCallCount += 1
-        XCTAssert(_testChangeNotificationsCallCount == expectedChangeNotificationsCallCount)
+        #expect(_testChangeNotificationsCallCount == expectedChangeNotificationsCallCount)
 
         // Merging with insertions
         _testChangeNotificationsExpectedChangedKeys = Blackbird.PrimaryKeyValues([[ .integer(40) ], [ .integer(Int64(count) + 1) ]])
@@ -935,13 +932,13 @@ final class BlackbirdTestTests: XCTestCase, @unchecked Sendable {
             var t1 = try TestModelWithDescription.readIsolated(from: db, core: core, id: 40)!
             t1.title = "Edited title!"
             try t1.writeIsolated(to: db, core: core)
-            
+
             let t2 = TestModelWithDescription(id: count + 1, title: "New entry", description: "New description")
             try t2.writeIsolated(to: db, core: core)
         }
         await megaYield()
         expectedChangeNotificationsCallCount += 1
-        XCTAssert(_testChangeNotificationsCallCount == expectedChangeNotificationsCallCount)
+        #expect(_testChangeNotificationsCallCount == expectedChangeNotificationsCallCount)
 
         // Merging with deletions
         _testChangeNotificationsExpectedChangedKeys = Blackbird.PrimaryKeyValues([[ .integer(50) ], [ .integer(51) ]])
@@ -956,7 +953,7 @@ final class BlackbirdTestTests: XCTestCase, @unchecked Sendable {
         }
         await megaYield()
         expectedChangeNotificationsCallCount += 1
-        XCTAssert(_testChangeNotificationsCallCount == expectedChangeNotificationsCallCount)
+        #expect(_testChangeNotificationsCallCount == expectedChangeNotificationsCallCount)
 
         // Merging with table-wide updates
         _testChangeNotificationsExpectedChangedKeys = nil
@@ -970,8 +967,7 @@ final class BlackbirdTestTests: XCTestCase, @unchecked Sendable {
         }
         await megaYield()
         expectedChangeNotificationsCallCount += 1
-        XCTAssert(_testChangeNotificationsCallCount == expectedChangeNotificationsCallCount)
-        
+        #expect(_testChangeNotificationsCallCount == expectedChangeNotificationsCallCount)
 
         // ------- Should be the last test in this func since it deletes the entire table -------
         // The SQLite truncate optimization: https://www.sqlite.org/lang_delete.html#the_truncate_optimization
@@ -981,17 +977,19 @@ final class BlackbirdTestTests: XCTestCase, @unchecked Sendable {
         try await TestModelWithDescription.query(in: db, "DELETE FROM $T")
         await megaYield()
         expectedChangeNotificationsCallCount += 2 // will trigger a full-database change notification, so it'll report 2 table changes: TestModel and TestModelWithDescription
-        XCTAssert(_testChangeNotificationsCallCount == expectedChangeNotificationsCallCount)
+        #expect(_testChangeNotificationsCallCount == expectedChangeNotificationsCallCount)
     }
 
-    func testKeyPathInterpolation() async throws {
+    @Test
+    func keyPathInterpolation() async throws {
         let str = "SELECT \(\TestModel.$title)"
-        XCTAssert(str == "SELECT title")
+        #expect(str == "SELECT title")
     }
-    
-    func testOptionalColumn() async throws {
+
+    @Test
+    func optionalColumn() async throws {
         let db = try Blackbird.Database.inMemoryDatabase(options: [.debugPrintEveryQuery, .debugPrintQueryParameterValues])
-        
+
         let testDate = Date()
         let testURL = URL(string: "https://github.com/marcoarment/Blackbird")!
         let testData = "Hi".data(using: .utf8)
@@ -1001,7 +999,7 @@ final class BlackbirdTestTests: XCTestCase, @unchecked Sendable {
         try await TestModelWithOptionalColumns(id: 4, date: Date(), name: "d", value: "4", optionalDate: testDate).write(to: db)
         try await TestModelWithOptionalColumns(id: 5, date: Date(), name: "e", value: "5", optionalURL: testURL).write(to: db)
         try await TestModelWithOptionalColumns(id: 6, date: Date(), name: "f", value: "6", optionalData: testData).write(to: db)
-        
+
         let t1 = try await TestModelWithOptionalColumns.read(from: db, id: 1)!
         let t2 = try await TestModelWithOptionalColumns.read(from: db, id: 2)!
         let t3 = try await TestModelWithOptionalColumns.read(from: db, id: 3)!
@@ -1009,103 +1007,105 @@ final class BlackbirdTestTests: XCTestCase, @unchecked Sendable {
         let t5 = try await TestModelWithOptionalColumns.read(from: db, id: 5)!
         let t6 = try await TestModelWithOptionalColumns.read(from: db, id: 6)!
 
-        XCTAssert(t1.name == "a")
-        XCTAssert(t2.name == "b")
-        XCTAssert(t3.name == "c")
-        XCTAssert(t4.name == "d")
-        XCTAssert(t5.name == "e")
-        XCTAssert(t6.name == "f")
+        #expect(t1.name == "a")
+        #expect(t2.name == "b")
+        #expect(t3.name == "c")
+        #expect(t4.name == "d")
+        #expect(t5.name == "e")
+        #expect(t6.name == "f")
 
-        XCTAssert(t1.value == nil)
-        XCTAssert(t2.value == "2")
-        XCTAssert(t3.value == "3")
-        XCTAssert(t4.value == "4")
-        XCTAssert(t5.value == "5")
-        XCTAssert(t6.value == "6")
+        #expect(t1.value == nil)
+        #expect(t2.value == "2")
+        #expect(t3.value == "3")
+        #expect(t4.value == "4")
+        #expect(t5.value == "5")
+        #expect(t6.value == "6")
 
-        XCTAssert(t1.otherValue == nil)
-        XCTAssert(t2.otherValue == nil)
-        XCTAssert(t3.otherValue == 30)
-        XCTAssert(t4.otherValue == nil)
-        XCTAssert(t5.otherValue == nil)
-        XCTAssert(t6.otherValue == nil)
+        #expect(t1.otherValue == nil)
+        #expect(t2.otherValue == nil)
+        #expect(t3.otherValue == 30)
+        #expect(t4.otherValue == nil)
+        #expect(t5.otherValue == nil)
+        #expect(t6.otherValue == nil)
 
-        XCTAssert(t1.optionalDate == nil)
-        XCTAssert(t2.optionalDate == nil)
-        XCTAssert(t3.optionalDate == nil)
-        XCTAssert(abs(t4.optionalDate!.timeIntervalSince(testDate)) < 0.001)
-        XCTAssert(t5.optionalDate == nil)
-        XCTAssert(t6.optionalDate == nil)
+        #expect(t1.optionalDate == nil)
+        #expect(t2.optionalDate == nil)
+        #expect(t3.optionalDate == nil)
+        #expect(abs(t4.optionalDate!.timeIntervalSince(testDate)) < 0.001)
+        #expect(t5.optionalDate == nil)
+        #expect(t6.optionalDate == nil)
 
-        XCTAssert(t1.optionalURL == nil)
-        XCTAssert(t2.optionalURL == nil)
-        XCTAssert(t3.optionalURL == nil)
-        XCTAssert(t4.optionalURL == nil)
-        XCTAssert(t5.optionalURL == testURL)
-        XCTAssert(t6.optionalURL == nil)
+        #expect(t1.optionalURL == nil)
+        #expect(t2.optionalURL == nil)
+        #expect(t3.optionalURL == nil)
+        #expect(t4.optionalURL == nil)
+        #expect(t5.optionalURL == testURL)
+        #expect(t6.optionalURL == nil)
 
-        XCTAssert(t1.optionalData == nil)
-        XCTAssert(t2.optionalData == nil)
-        XCTAssert(t3.optionalData == nil)
-        XCTAssert(t4.optionalData == nil)
-        XCTAssert(t5.optionalData == nil)
-        XCTAssert(t6.optionalData == testData)
-        
+        #expect(t1.optionalData == nil)
+        #expect(t2.optionalData == nil)
+        #expect(t3.optionalData == nil)
+        #expect(t4.optionalData == nil)
+        #expect(t5.optionalData == nil)
+        #expect(t6.optionalData == testData)
+
         let random = try await TestModelWithOptionalColumns.read(from: db, matching: .literal("id % 5 = ?", 3))
-        XCTAssert(random.count == 1)
-        XCTAssert(random.first!.id == 3)
+        #expect(random.count == 1)
+        #expect(random.first!.id == 3)
 
         try await TestModelWithOptionalColumns.delete(from: db, matching: .all)
         let results = try await TestModelWithOptionalColumns.read(from: db, matching: .all)
-        XCTAssert(results.count == 0)
+        #expect(results.count == 0)
     }
 
-    func testUniqueIndex() async throws {
+    @Test
+    func uniqueIndex() async throws {
         let db = try Blackbird.Database.inMemoryDatabase(options: [.debugPrintEveryQuery, .debugPrintQueryParameterValues])
 
         let testDate = Date()
         try await TestModelWithUniqueIndex(id: 1, a: "a1", b: 100, c: testDate).write(to: db)
         try await TestModelWithUniqueIndex(id: 2, a: "a2", b: 200, c: testDate).write(to: db)
-        
+
         var caughtExpectedError = false
         do {
             try await TestModelWithUniqueIndex(id: 3, a: "a2", b: 200, c: testDate).write(to: db)
         } catch Blackbird.Database.Error.uniqueConstraintFailed {
             caughtExpectedError = true
         }
-        XCTAssert(caughtExpectedError)
+        #expect(caughtExpectedError)
 
         let allBefore = try await TestModelWithUniqueIndex.read(from: db, sqlWhere: "1 ORDER BY id")
-        XCTAssert(allBefore.count == 2)
+        #expect(allBefore.count == 2)
 
-        XCTAssert(allBefore[0].id == 1)
-        XCTAssert(allBefore[0].a == "a1")
-        XCTAssert(allBefore[0].b == 100)
+        #expect(allBefore[0].id == 1)
+        #expect(allBefore[0].a == "a1")
+        #expect(allBefore[0].b == 100)
 
-        XCTAssert(allBefore[1].id == 2)
-        XCTAssert(allBefore[1].a == "a2")
-        XCTAssert(allBefore[1].b == 200)
+        #expect(allBefore[1].id == 2)
+        #expect(allBefore[1].a == "a2")
+        #expect(allBefore[1].b == 200)
 
         try await TestModelWithUniqueIndex(id: 3, a: "a2", b: 201, c: testDate).write(to: db)
-        
+
         let all = try await TestModelWithUniqueIndex.read(from: db, sqlWhere: "1 ORDER BY id")
-        XCTAssert(all.count == 3)
+        #expect(all.count == 3)
 
-        XCTAssert(all[0].id == 1)
-        XCTAssert(all[0].a == "a1")
-        XCTAssert(all[0].b == 100)
+        #expect(all[0].id == 1)
+        #expect(all[0].a == "a1")
+        #expect(all[0].b == 100)
 
-        XCTAssert(all[1].id == 2)
-        XCTAssert(all[1].a == "a2")
-        XCTAssert(all[1].b == 200)
+        #expect(all[1].id == 2)
+        #expect(all[1].a == "a2")
+        #expect(all[1].b == 200)
 
-        XCTAssert(all[2].id == 3)
-        XCTAssert(all[2].a == "a2")
-        XCTAssert(all[2].b == 201)
+        #expect(all[2].id == 3)
+        #expect(all[2].a == "a2")
+        #expect(all[2].b == 201)
     }
-    
+
     // To test bug #25: https://github.com/marcoarment/Blackbird/issues/25
-    func testConcurrentTransactions() async throws {
+    @Test
+    func concurrentTransactions() async throws {
         let db = try Blackbird.Database(path: sqliteFilename)
         let semaphore = AsyncSemaphore(value: 0)
         
@@ -1123,8 +1123,9 @@ final class BlackbirdTestTests: XCTestCase, @unchecked Sendable {
         
         for _ in 0..<numTasks { await semaphore.wait() }
     }
-    
-    func testCache() async throws {
+
+    @Test
+    func cache() async throws {
         try await CacheLimitScope(testModel: 10000).run {
         let db = try Blackbird.Database(path: sqliteFilename)
 
@@ -1141,74 +1142,75 @@ final class BlackbirdTestTests: XCTestCase, @unchecked Sendable {
         
         db.resetCachePerformanceMetrics(tableName: TestModel.tableName)
         var t = try await TestModel.read(from: db, id: 1)!
-        XCTAssert(db.cachePerformanceMetricsByTableName()[TestModel.tableName]!.misses == 0)
-        XCTAssert(db.cachePerformanceMetricsByTableName()[TestModel.tableName]!.hits == 1)
+        #expect(db.cachePerformanceMetricsByTableName()[TestModel.tableName]!.misses == 0)
+        #expect(db.cachePerformanceMetricsByTableName()[TestModel.tableName]!.hits == 1)
         
         db.resetCachePerformanceMetrics(tableName: TestModel.tableName)
         t.title = "new"
         try await t.write(to: db)
-        XCTAssert(db.cachePerformanceMetricsByTableName()[TestModel.tableName]!.writes == 1)
-        XCTAssert(db.cachePerformanceMetricsByTableName()[TestModel.tableName]!.rowInvalidations == 1)
-        XCTAssert(db.cachePerformanceMetricsByTableName()[TestModel.tableName]!.tableInvalidations == 0)
+        #expect(db.cachePerformanceMetricsByTableName()[TestModel.tableName]!.writes == 1)
+        #expect(db.cachePerformanceMetricsByTableName()[TestModel.tableName]!.rowInvalidations == 1)
+        #expect(db.cachePerformanceMetricsByTableName()[TestModel.tableName]!.tableInvalidations == 0)
         
         db.resetCachePerformanceMetrics(tableName: TestModel.tableName)
         t = try await TestModel.read(from: db, id: 1)!
-        XCTAssert(t.title == "new")
-        XCTAssert(db.cachePerformanceMetricsByTableName()[TestModel.tableName]!.misses == 0)
-        XCTAssert(db.cachePerformanceMetricsByTableName()[TestModel.tableName]!.hits == 1)
+        #expect(t.title == "new")
+        #expect(db.cachePerformanceMetricsByTableName()[TestModel.tableName]!.misses == 0)
+        #expect(db.cachePerformanceMetricsByTableName()[TestModel.tableName]!.hits == 1)
 
         db.resetCachePerformanceMetrics(tableName: TestModel.tableName)
         try await db.query("UPDATE TestModel SET title = 'new2' WHERE id = 1")
         t = try await TestModel.read(from: db, id: 1)!
-        XCTAssert(t.title == "new2")
-        XCTAssert(db.cachePerformanceMetricsByTableName()[TestModel.tableName]!.misses == 1)
-        XCTAssert(db.cachePerformanceMetricsByTableName()[TestModel.tableName]!.hits == 0)
-        XCTAssert(db.cachePerformanceMetricsByTableName()[TestModel.tableName]!.rowInvalidations == 0)
-        XCTAssert(db.cachePerformanceMetricsByTableName()[TestModel.tableName]!.tableInvalidations == 1)
+        #expect(t.title == "new2")
+        #expect(db.cachePerformanceMetricsByTableName()[TestModel.tableName]!.misses == 1)
+        #expect(db.cachePerformanceMetricsByTableName()[TestModel.tableName]!.hits == 0)
+        #expect(db.cachePerformanceMetricsByTableName()[TestModel.tableName]!.rowInvalidations == 0)
+        #expect(db.cachePerformanceMetricsByTableName()[TestModel.tableName]!.tableInvalidations == 1)
 
         db.resetCachePerformanceMetrics(tableName: TestModel.tableName)
         try await TestModel.update(in: db, set: [ \.$title : "new2" ], matching: \.$id == 1)
         t = try await TestModel.read(from: db, id: 1)!
-        XCTAssert(db.cachePerformanceMetricsByTableName()[TestModel.tableName]!.misses == 0)
-        XCTAssert(db.cachePerformanceMetricsByTableName()[TestModel.tableName]!.hits == 1)
+        #expect(db.cachePerformanceMetricsByTableName()[TestModel.tableName]!.misses == 0)
+        #expect(db.cachePerformanceMetricsByTableName()[TestModel.tableName]!.hits == 1)
 
         db.resetCachePerformanceMetrics(tableName: TestModel.tableName)
         try await TestModel.update(in: db, set: [ \.$title : "new3" ], matching: \.$id < 10)
         t = try await TestModel.read(from: db, id: 1)!
-        XCTAssert(t.title == "new3")
-        XCTAssert(db.cachePerformanceMetricsByTableName()[TestModel.tableName]!.misses == 1)
-        XCTAssert(db.cachePerformanceMetricsByTableName()[TestModel.tableName]!.hits == 0)
+        #expect(t.title == "new3")
+        #expect(db.cachePerformanceMetricsByTableName()[TestModel.tableName]!.misses == 1)
+        #expect(db.cachePerformanceMetricsByTableName()[TestModel.tableName]!.hits == 0)
         
         db.resetCachePerformanceMetrics(tableName: TestModel.tableName)
         var titleMatch = try await TestModel.query(in: db, columns: [\.$title], matching: \.$url == lastURL)
-        XCTAssert(!titleMatch.isEmpty)
-        XCTAssert(db.cachePerformanceMetricsByTableName()[TestModel.tableName]!.misses == 1)
-        XCTAssert(db.cachePerformanceMetricsByTableName()[TestModel.tableName]!.hits == 0)
+        #expect(!titleMatch.isEmpty)
+        #expect(db.cachePerformanceMetricsByTableName()[TestModel.tableName]!.misses == 1)
+        #expect(db.cachePerformanceMetricsByTableName()[TestModel.tableName]!.hits == 0)
         titleMatch = try await TestModel.query(in: db, columns: [\.$title], matching: \.$url == lastURL)
-        XCTAssert(!titleMatch.isEmpty)
-        XCTAssert(db.cachePerformanceMetricsByTableName()[TestModel.tableName]!.misses == 1)
-        XCTAssert(db.cachePerformanceMetricsByTableName()[TestModel.tableName]!.hits == 1)
+        #expect(!titleMatch.isEmpty)
+        #expect(db.cachePerformanceMetricsByTableName()[TestModel.tableName]!.misses == 1)
+        #expect(db.cachePerformanceMetricsByTableName()[TestModel.tableName]!.hits == 1)
         
         t.id = 9998
         try await t.write(to: db)
-        XCTAssert(db.cachePerformanceMetricsByTableName()[TestModel.tableName]!.queryInvalidations == 1)
-        XCTAssert(db.cachePerformanceMetricsByTableName()[TestModel.tableName]!.rowInvalidations == 0)
-        XCTAssert(db.cachePerformanceMetricsByTableName()[TestModel.tableName]!.tableInvalidations == 0)
+        #expect(db.cachePerformanceMetricsByTableName()[TestModel.tableName]!.queryInvalidations == 1)
+        #expect(db.cachePerformanceMetricsByTableName()[TestModel.tableName]!.rowInvalidations == 0)
+        #expect(db.cachePerformanceMetricsByTableName()[TestModel.tableName]!.tableInvalidations == 0)
         
         try await TestModel.update(in: db, set: [\.$id : 9999], matching: \.$id == 1)
-        XCTAssert(db.cachePerformanceMetricsByTableName()[TestModel.tableName]!.queryInvalidations == 1)
-        XCTAssert(db.cachePerformanceMetricsByTableName()[TestModel.tableName]!.rowInvalidations == 0)
-        XCTAssert(db.cachePerformanceMetricsByTableName()[TestModel.tableName]!.tableInvalidations == 0)
+        #expect(db.cachePerformanceMetricsByTableName()[TestModel.tableName]!.queryInvalidations == 1)
+        #expect(db.cachePerformanceMetricsByTableName()[TestModel.tableName]!.rowInvalidations == 0)
+        #expect(db.cachePerformanceMetricsByTableName()[TestModel.tableName]!.tableInvalidations == 0)
         }
     }
-    
-    func testCacheSpeed() async throws {
+
+	@Test
+	func cacheSpeed() async throws {
         let cacheEnabled = true
         try await CacheLimitScope(testModel: cacheEnabled ? 10000 : 0).run {
         let startTime = Date()
-        try await testQueries()
-        try await testHeavyWorkload()
-        try await testChangeNotifications()
+        try await queries()
+        try await heavyWorkload()
+        try await changeNotifications()
         let duration = abs(startTime.timeIntervalSinceNow)
         print("took \(duration) seconds")
         }
@@ -1226,14 +1228,15 @@ final class BlackbirdTestTests: XCTestCase, @unchecked Sendable {
 //        }
     }
 
-    func testFTS() async throws {
+    @Test
+    func fts() async throws {
         let options: Blackbird.Database.Options = [.debugPrintEveryQuery, .requireModelSchemaValidationBeforeUse]
 
         let db1 = try Blackbird.Database(path: sqliteFilename, options: options)
         let resolution1 = try await FTSModel.resolveSchema(in: db1)
-        XCTAssert(resolution1.contains(.createdTable))
-        XCTAssert(resolution1.contains(.migratedFullTextIndex))
-        XCTAssert(!resolution1.contains(.migratedTable))
+        #expect(resolution1.contains(.createdTable))
+        #expect(resolution1.contains(.migratedFullTextIndex))
+        #expect(!resolution1.contains(.migratedTable))
 
         let count = min(TestData.URLs.count, TestData.titles.count, TestData.descriptions.count)
         
@@ -1245,52 +1248,48 @@ final class BlackbirdTestTests: XCTestCase, @unchecked Sendable {
         }
 
         let results1 = try await FTSModel.fullTextSearch(from: db1, matching: .match("tech"), options: .default)
-        XCTAssert(results1.count == 38)
+        #expect(results1.count == 38)
         await db1.close()
         
         let db2 = try Blackbird.Database(path: sqliteFilename, options: options)
         let resolution2 = try await FTSModel.resolveSchema(in: db2)
-        XCTAssert(!resolution2.contains(.createdTable))
-        XCTAssert(!resolution2.contains(.migratedFullTextIndex))
-        XCTAssert(!resolution2.contains(.migratedTable))
+        #expect(!resolution2.contains(.createdTable))
+        #expect(!resolution2.contains(.migratedFullTextIndex))
+        #expect(!resolution2.contains(.migratedTable))
         try await FTSModel.optimizeFullTextIndex(in: db2)
         let results2a = try await FTSModel.fullTextSearch(from: db2, matching: .match(column: \.$title, "podcast"), options: .default)
-        XCTAssert(results2a.count == 111)
+        #expect(results2a.count == 111)
         let results2b = try await FTSModel.fullTextSearch(from: db2, matching: .match(column: \.$title, "podcast") && \.$category == 1, options: .init(scoreMultipleColumn: \.$category))
-        XCTAssert(results2b.count == 10)
+        #expect(results2b.count == 10)
         await db2.close()
         
         
         let db3 = try Blackbird.Database(path: sqliteFilename, options: options)
         let resolution3 = try await FTSModelAfterMigration.resolveSchema(in: db3)
-        XCTAssert(!resolution3.contains(.createdTable))
-        XCTAssert(resolution3.contains(.migratedFullTextIndex))
-        XCTAssert(!resolution3.contains(.migratedTable))
+        #expect(!resolution3.contains(.createdTable))
+        #expect(resolution3.contains(.migratedFullTextIndex))
+        #expect(!resolution3.contains(.migratedTable))
 
         let results3 = try await FTSModelAfterMigration.fullTextSearch(from: db3, matching: .match(column: \.$keywords, "finance"), options: .default)
-        XCTAssert(results3.count == 18)
+        #expect(results3.count == 18)
         await db3.close()
         
         let db4 = try Blackbird.Database(path: sqliteFilename, options: options)
         let resolution4 = try await FTSModelAfterDeletion.resolveSchema(in: db4)
-        XCTAssert(!resolution4.contains(.createdTable))
-        XCTAssert(resolution4.contains(.migratedFullTextIndex))
-        XCTAssert(!resolution4.contains(.migratedTable))
+        #expect(!resolution4.contains(.createdTable))
+        #expect(resolution4.contains(.migratedFullTextIndex))
+        #expect(!resolution4.contains(.migratedTable))
         await db4.close()
 
         let db5 = try Blackbird.Database(path: sqliteFilename, options: options)
         let resolution5 = try await FTSModelAfterDeletion.resolveSchema(in: db5)
-        XCTAssert(!resolution5.contains(.createdTable))
-        XCTAssert(!resolution5.contains(.migratedFullTextIndex))
-        XCTAssert(!resolution5.contains(.migratedTable))
-
-//        for result in results3 {
-//            guard let instance = try await result.instance(from: db3) else { continue }
-//            print("[#] id \(instance.id), cat \(instance.category), title: [\(result.highlighted(\.$title)!)], keywords: [\(result.snippet(\.$keywords) ?? "--")]")
-//        }
+        #expect(!resolution5.contains(.createdTable))
+        #expect(!resolution5.contains(.migratedFullTextIndex))
+        #expect(!resolution5.contains(.migratedTable))
     }
 
-    func testBackup() async throws {
+    @Test
+    func backup() async throws {
         let db = try Blackbird.Database(path: sqliteFilename)
         for i in 0..<1000 {
             try await TestModel(id: Int64(i), title: TestData.randomTitle, url: TestData.randomURL).write(to: db)
@@ -1311,12 +1310,11 @@ final class BlackbirdTestTests: XCTestCase, @unchecked Sendable {
         let modelsInDb = try await TestModel.read(from: db)
         let modelsInBackupDb = try await TestModel.read(from: backupDb)
 
-        XCTAssert(modelsInDb == modelsInBackupDb)
+        #expect(modelsInDb == modelsInBackupDb)
 
         await db.close()
-        await backupDb.close()
-    }
-
+		await backupDb.close()
+	}
 
 /* Tests duplicate-index detection. Throws fatal error on success.
     func testDuplicateIndex() async throws {
@@ -1329,4 +1327,3 @@ final class BlackbirdTestTests: XCTestCase, @unchecked Sendable {
     }
 */
 }
-
