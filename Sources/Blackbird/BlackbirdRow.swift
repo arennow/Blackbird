@@ -35,33 +35,33 @@ import Foundation
 
 // MARK: - Standard row
 
-extension Blackbird {
-    /// A dictionary of a single table row's values, keyed by their column names.
-    public typealias Row = Dictionary<String, Blackbird.Value>
+public extension Blackbird {
+	/// A dictionary of a single table row's values, keyed by their column names.
+	typealias Row = Dictionary<String, Blackbird.Value>
 }
 
-extension Blackbird.Row {
-    public subscript<T: BlackbirdModel, V: BlackbirdColumnWrappable>(_ keyPath: KeyPath<T, BlackbirdColumn<Optional<V>>>) -> V? {
-        let table = SchemaGenerator.shared.table(for: T.self)
-        let columnName = table.keyPathToColumnName(keyPath: keyPath)
+public extension Blackbird.Row {
+	subscript<T: BlackbirdModel, V: BlackbirdColumnWrappable>(_ keyPath: KeyPath<T, BlackbirdColumn<Optional<V>>>) -> V? {
+		let table = SchemaGenerator.shared.table(for: T.self)
+		let columnName = table.keyPathToColumnName(keyPath: keyPath)
 
-        guard let value = self[columnName], value != .null else { return nil }
-        guard let typedValue = V.fromValue(value) else { fatalError("\(String(describing: T.self)).\(columnName) value in Blackbird.Row dictionary not convertible to \(String(describing: V.self))") }
-        return typedValue
-    }
+		guard let value = self[columnName], value != .null else { return nil }
+		guard let typedValue = V.fromValue(value) else { fatalError("\(String(describing: T.self)).\(columnName) value in Blackbird.Row dictionary not convertible to \(String(describing: V.self))") }
+		return typedValue
+	}
 
-    public subscript<T: BlackbirdModel, V: BlackbirdColumnWrappable>(_ keyPath: KeyPath<T, BlackbirdColumn<V>>) -> V {
-        let table = SchemaGenerator.shared.table(for: T.self)
-        let columnName = table.keyPathToColumnName(keyPath: keyPath)
+	subscript<T: BlackbirdModel, V: BlackbirdColumnWrappable>(_ keyPath: KeyPath<T, BlackbirdColumn<V>>) -> V {
+		let table = SchemaGenerator.shared.table(for: T.self)
+		let columnName = table.keyPathToColumnName(keyPath: keyPath)
 
-        guard let value = self[columnName] else { fatalError("\(String(describing: T.self)).\(columnName) value not present in Blackbird.Row dictionary") }
-        guard let typedValue = V.fromValue(value) else { fatalError("\(String(describing: T.self)).\(columnName) value in Blackbird.Row dictionary not convertible to \(String(describing: V.self))") }
-        return typedValue
-    }
+		guard let value = self[columnName] else { fatalError("\(String(describing: T.self)).\(columnName) value not present in Blackbird.Row dictionary") }
+		guard let typedValue = V.fromValue(value) else { fatalError("\(String(describing: T.self)).\(columnName) value in Blackbird.Row dictionary not convertible to \(String(describing: V.self))") }
+		return typedValue
+	}
 }
-
 
 // MARK: - Model-specific row
+
 // This allows typed key-pair lookups without specifying the type name at the call site, e.g.:
 //
 //   row[\.$title]
@@ -70,60 +70,59 @@ extension Blackbird.Row {
 //
 //   row[\MyModelName.$title]
 //
-extension Blackbird {
-    /// A specialized version of ``Row`` associated with its source ``BlackbirdModel`` type for convenient access to its values with column key-paths.
-    public struct ModelRow<T: BlackbirdModel>: Collection, Equatable, Sendable {
-        private let table: Blackbird.Table
-    
-        internal init(_ row: Blackbird.Row, table: Blackbird.Table) {
-            self.table = table
-            dictionary = row
-        }
-        public var row: Blackbird.Row {
-            get { dictionary }
-        }
-    
-        public subscript<V: BlackbirdColumnWrappable>(_ keyPath: KeyPath<T, BlackbirdColumn<Optional<V>>>) -> V? {
-            let columnName = table.keyPathToColumnName(keyPath: keyPath)
-            
-            guard let value = dictionary[columnName], value != .null else { return nil }
-            guard let typedValue = V.fromValue(value) else { fatalError("\(String(describing: T.self)).\(columnName) value in Blackbird.Row dictionary not convertible to \(String(describing: V.self))") }
-            return typedValue
-        }
+public extension Blackbird {
+	/// A specialized version of ``Row`` associated with its source ``BlackbirdModel`` type for convenient access to its values with column key-paths.
+	struct ModelRow<T: BlackbirdModel>: Collection, Equatable, Sendable {
+		private let table: Blackbird.Table
 
-        public subscript<V: BlackbirdColumnWrappable>(_ keyPath: KeyPath<T, BlackbirdColumn<V>>) -> V {
-            let columnName = table.keyPathToColumnName(keyPath: keyPath)
-            
-            guard let value = dictionary[columnName] else { fatalError("\(String(describing: T.self)).\(columnName) value not present in Blackbird.Row dictionary") }
-            guard let typedValue = V.fromValue(value) else { fatalError("\(String(describing: T.self)).\(columnName) value in Blackbird.Row dictionary not convertible to \(String(describing: V.self))") }
-            return typedValue
-        }
+		init(_ row: Blackbird.Row, table: Blackbird.Table) {
+			self.table = table
+			self.dictionary = row
+		}
 
-        public func value(keyPath: PartialKeyPath<T>) -> Blackbird.Value? {
-            let columnName = table.keyPathToColumnName(keyPath: keyPath)
-            guard let value = dictionary[columnName] else { fatalError("\(String(describing: T.self)).\(columnName) value not present in Blackbird.Row dictionary") }
-            return value
-        }
+		public var row: Blackbird.Row { self.dictionary }
 
-        // Collection conformance
-        public typealias DictionaryType = Dictionary<String, Blackbird.Value>
-        public typealias Index = DictionaryType.Index
-        private var dictionary: DictionaryType = [:]
-        public var keys: Dictionary<String, Blackbird.Value>.Keys { dictionary.keys }
-        public typealias Indices = DictionaryType.Indices
-        public typealias Iterator = DictionaryType.Iterator
-        public typealias SubSequence = DictionaryType.SubSequence
-        public var startIndex: Index { dictionary.startIndex }
-        public var endIndex: DictionaryType.Index { dictionary.endIndex }
-        public subscript(position: Index) -> Iterator.Element { dictionary[position] }
-        public subscript(bounds: Range<Index>) -> SubSequence { dictionary[bounds] }
-        public var indices: Indices { dictionary.indices }
-        public subscript(key: String) -> Blackbird.Value? {
-            get { dictionary[key] }
-            set { dictionary[key] = newValue }
-        }
-        public func index(after i: Index) -> Index { dictionary.index(after: i) }
-        public func makeIterator() -> DictionaryIterator<String, Blackbird.Value> { dictionary.makeIterator() }
-    }
+		public subscript<V: BlackbirdColumnWrappable>(_ keyPath: KeyPath<T, BlackbirdColumn<Optional<V>>>) -> V? {
+			let columnName = self.table.keyPathToColumnName(keyPath: keyPath)
+
+			guard let value = dictionary[columnName], value != .null else { return nil }
+			guard let typedValue = V.fromValue(value) else { fatalError("\(String(describing: T.self)).\(columnName) value in Blackbird.Row dictionary not convertible to \(String(describing: V.self))") }
+			return typedValue
+		}
+
+		public subscript<V: BlackbirdColumnWrappable>(_ keyPath: KeyPath<T, BlackbirdColumn<V>>) -> V {
+			let columnName = self.table.keyPathToColumnName(keyPath: keyPath)
+
+			guard let value = dictionary[columnName] else { fatalError("\(String(describing: T.self)).\(columnName) value not present in Blackbird.Row dictionary") }
+			guard let typedValue = V.fromValue(value) else { fatalError("\(String(describing: T.self)).\(columnName) value in Blackbird.Row dictionary not convertible to \(String(describing: V.self))") }
+			return typedValue
+		}
+
+		public func value(keyPath: PartialKeyPath<T>) -> Blackbird.Value? {
+			let columnName = self.table.keyPathToColumnName(keyPath: keyPath)
+			guard let value = dictionary[columnName] else { fatalError("\(String(describing: T.self)).\(columnName) value not present in Blackbird.Row dictionary") }
+			return value
+		}
+
+		// Collection conformance
+		public typealias DictionaryType = Dictionary<String, Blackbird.Value>
+		public typealias Index = DictionaryType.Index
+		private var dictionary: DictionaryType = [:]
+		public var keys: Dictionary<String, Blackbird.Value>.Keys { self.dictionary.keys }
+		public typealias Indices = DictionaryType.Indices
+		public typealias Iterator = DictionaryType.Iterator
+		public typealias SubSequence = DictionaryType.SubSequence
+		public var startIndex: Index { self.dictionary.startIndex }
+		public var endIndex: DictionaryType.Index { self.dictionary.endIndex }
+		public subscript(position: Index) -> Iterator.Element { self.dictionary[position] }
+		public subscript(bounds: Range<Index>) -> SubSequence { self.dictionary[bounds] }
+		public var indices: Indices { self.dictionary.indices }
+		public subscript(key: String) -> Blackbird.Value? {
+			get { self.dictionary[key] }
+			set { self.dictionary[key] = newValue }
+		}
+
+		public func index(after i: Index) -> Index { self.dictionary.index(after: i) }
+		public func makeIterator() -> DictionaryIterator<String, Blackbird.Value> { self.dictionary.makeIterator() }
+	}
 }
-

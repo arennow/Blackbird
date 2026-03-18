@@ -34,124 +34,123 @@
 import Foundation
 import Synchronization
 
-internal protocol ColumnWrapper: WrappedType {
-    associatedtype ValueType: BlackbirdColumnWrappable
-    var value: ValueType { get }
-    var valueType: any BlackbirdColumnWrappable.Type { get }
-    func hasChanged(in database: Blackbird.Database) -> Bool
-    func clearHasChanged(in database: Blackbird.Database)
-    var internalNameInSchemaGenerator: Box<Mutex<String?>> { get }
+protocol ColumnWrapper: WrappedType {
+	associatedtype ValueType: BlackbirdColumnWrappable
+	var value: ValueType { get }
+	var valueType: any BlackbirdColumnWrappable.Type { get }
+	func hasChanged(in database: Blackbird.Database) -> Bool
+	func clearHasChanged(in database: Blackbird.Database)
+	var internalNameInSchemaGenerator: Box<Mutex<String?>> { get }
 }
 
 /// Property wrapper for column variables in ``BlackbirdModel`` `struct` definitions.
-@propertyWrapper public struct BlackbirdColumn<T>: ColumnWrapper, WrappedType, Equatable, Sendable, Codable where T: BlackbirdColumnWrappable {
-    internal var valueType: any BlackbirdColumnWrappable.Type { T.self }
-    
-    public static func == (lhs: Self, rhs: Self) -> Bool { type(of: lhs) == type(of: rhs) && lhs.value == rhs.value }
-    
-    private var _value: T
-    internal struct ColumnState<U> {
-        var hasChanged: Bool
-        weak var lastUsedDatabase: Blackbird.Database?
-        
-        init(hasChanged: Bool, lastUsedDatabase: Blackbird.Database? = nil) {
-            self.hasChanged = hasChanged
-            self.lastUsedDatabase = lastUsedDatabase
-        }
-    }
-    
-    private let state: Box<Mutex<ColumnState<T>>>
-    let internalNameInSchemaGenerator = Box(Mutex<String?>(nil))
+@propertyWrapper public struct BlackbirdColumn<T: BlackbirdColumnWrappable>: ColumnWrapper, WrappedType, Equatable, Sendable, Codable {
+	var valueType: any BlackbirdColumnWrappable.Type { T.self }
 
-    public var value: T {
-        get { state.value.withLock { _ in self._value } }
-        set { self.wrappedValue = newValue }
-    }
+	public static func == (lhs: Self, rhs: Self) -> Bool { type(of: lhs) == type(of: rhs) && lhs.value == rhs.value }
 
-    public var projectedValue: BlackbirdColumn<T> { self }
-    static internal func schemaGeneratorWrappedType() -> Any.Type { T.self }
+	private var _value: T
+	struct ColumnState<U> {
+		var hasChanged: Bool
+		weak var lastUsedDatabase: Blackbird.Database?
 
-    public var wrappedValue: T {
-        get { state.value.withLock { _ in self._value } }
-        set {
-            state.value.withLock { state in
-                guard self._value != newValue else { return }
-                self._value = newValue
-                state.hasChanged = true
-            }
-        }
-    }
-    
-    /// Whether this value has changed since last being saved or read. This errs on the side of over-reporting changes, and may return `true` if the value has not actually changed.
-    public func hasChanged(in database: Blackbird.Database) -> Bool {
-        state.value.withLock { state in
-            if state.lastUsedDatabase != database { return true }
-            return state.hasChanged
-        }
-    }
-    
-    internal func clearHasChanged(in database: Blackbird.Database) {
-        state.value.withLock { state in
-            state.lastUsedDatabase = database
-            state.hasChanged = false
-        }
-    }
+		init(hasChanged: Bool, lastUsedDatabase: Blackbird.Database? = nil) {
+			self.hasChanged = hasChanged
+			self.lastUsedDatabase = lastUsedDatabase
+		}
+	}
 
-    public init(wrappedValue: T) {
-        _value = wrappedValue
-        state = Box(Mutex(ColumnState(hasChanged: true, lastUsedDatabase: nil)))
-    }
-    
-    public init(from decoder: Decoder) throws {
-        let container = try decoder.singleValueContainer()
-        let value = try container.decode(T.self)
-        _value = value
-        if let sqliteDecoder = decoder as? BlackbirdSQLiteDecoder {
-            state = Box(Mutex(ColumnState(hasChanged: false, lastUsedDatabase: sqliteDecoder.database)))
-        } else {
-            state = Box(Mutex(ColumnState(hasChanged: true, lastUsedDatabase: nil)))
-        }
-    }
-    
-    public func encode(to encoder: Encoder) throws {
-        var container = encoder.singleValueContainer()
-        try container.encode(self.value)
-    }
+	private let state: Box<Mutex<ColumnState<T>>>
+	let internalNameInSchemaGenerator = Box(Mutex<String?>(nil))
+
+	public var value: T {
+		get { self.state.value.withLock { _ in self._value } }
+		set { self.wrappedValue = newValue }
+	}
+
+	public var projectedValue: BlackbirdColumn<T> { self }
+	static func schemaGeneratorWrappedType() -> Any.Type { T.self }
+
+	public var wrappedValue: T {
+		get { self.state.value.withLock { _ in self._value } }
+		set {
+			self.state.value.withLock { state in
+				guard self._value != newValue else { return }
+				self._value = newValue
+				state.hasChanged = true
+			}
+		}
+	}
+
+	/// Whether this value has changed since last being saved or read. This errs on the side of over-reporting changes, and may return `true` if the value has not actually changed.
+	public func hasChanged(in database: Blackbird.Database) -> Bool {
+		self.state.value.withLock { state in
+			if state.lastUsedDatabase != database { return true }
+			return state.hasChanged
+		}
+	}
+
+	func clearHasChanged(in database: Blackbird.Database) {
+		self.state.value.withLock { state in
+			state.lastUsedDatabase = database
+			state.hasChanged = false
+		}
+	}
+
+	public init(wrappedValue: T) {
+		self._value = wrappedValue
+		self.state = Box(Mutex(ColumnState(hasChanged: true, lastUsedDatabase: nil)))
+	}
+
+	public init(from decoder: Decoder) throws {
+		let container = try decoder.singleValueContainer()
+		let value = try container.decode(T.self)
+		self._value = value
+		if let sqliteDecoder = decoder as? BlackbirdSQLiteDecoder {
+			self.state = Box(Mutex(ColumnState(hasChanged: false, lastUsedDatabase: sqliteDecoder.database)))
+		} else {
+			self.state = Box(Mutex(ColumnState(hasChanged: true, lastUsedDatabase: nil)))
+		}
+	}
+
+	public func encode(to encoder: Encoder) throws {
+		var container = encoder.singleValueContainer()
+		try container.encode(self.value)
+	}
 }
 
 // MARK: - Accessing wrapped types of optionals and column wrappers
-internal protocol OptionalProtocol {
-    var wrappedOptionalValue: Any? { get }
-}
-extension Optional: OptionalProtocol {
-    var wrappedOptionalValue: Any? {
-        get {
-            switch self {
-                case .some(let w): return w
-                default: return nil
-            }
-        }
-    }
+
+protocol OptionalProtocol {
+	var wrappedOptionalValue: Any? { get }
 }
 
-internal protocol OptionalCreatable {
-    associatedtype Wrapped
-    static func createFromNilValue() -> Self
-    static func createFromValue(_ wrapped: Any) -> Self
-    static func creatableWrappedType() -> Any.Type
+extension Optional: OptionalProtocol {
+	var wrappedOptionalValue: Any? {
+		switch self {
+			case .some(let w): return w
+			default: return nil
+		}
+	}
+}
+
+protocol OptionalCreatable {
+	associatedtype Wrapped
+	static func createFromNilValue() -> Self
+	static func createFromValue(_ wrapped: Any) -> Self
+	static func creatableWrappedType() -> Any.Type
 }
 
 extension Optional: OptionalCreatable {
-    static func createFromNilValue() -> Self { .none }
-    static func createFromValue(_ wrapped: Any) -> Self { .some(wrapped as! Wrapped) }
-    static func creatableWrappedType() -> Any.Type { Wrapped.self }
+	static func createFromNilValue() -> Self { .none }
+	static func createFromValue(_ wrapped: Any) -> Self { .some(wrapped as! Wrapped) }
+	static func creatableWrappedType() -> Any.Type { Wrapped.self }
 }
 
-internal protocol WrappedType {
-    static func schemaGeneratorWrappedType() -> Any.Type
+protocol WrappedType {
+	static func schemaGeneratorWrappedType() -> Any.Type
 }
 
 extension Optional: WrappedType {
-    internal static func schemaGeneratorWrappedType() -> Any.Type { Wrapped.self }
+	static func schemaGeneratorWrappedType() -> Any.Type { Wrapped.self }
 }
-

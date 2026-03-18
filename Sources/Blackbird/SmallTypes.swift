@@ -26,8 +26,8 @@
 /// The canonical usage is `Box<Mutex<T>>`, where the `Box` provides stable heap
 /// storage and the `Mutex` provides thread-safe access.
 final class Box<Wrapped: ~Copyable> {
-    let value: Wrapped
-    init(_ value: consuming Wrapped) { self.value = value }
+	let value: Wrapped
+	init(_ value: consuming Wrapped) { self.value = value }
 }
 
 extension Box: Sendable where Wrapped: Sendable {}
@@ -38,8 +38,8 @@ extension Box: Sendable where Wrapped: Sendable {}
 /// are safe to pass across isolation boundaries when access is externally serialized — in this
 /// codebase, that serialization is provided by the `Database.Core` actor.
 struct SQLiteDBHandle: @unchecked Sendable {
-    let pointer: OpaquePointer
-    init(_ pointer: OpaquePointer) { self.pointer = pointer }
+	let pointer: OpaquePointer
+	init(_ pointer: OpaquePointer) { self.pointer = pointer }
 }
 
 /// A wrapper around a raw SQLite prepared-statement handle (`OpaquePointer`).
@@ -50,6 +50,6 @@ struct SQLiteDBHandle: @unchecked Sendable {
 /// provided by the `Database.Core` actor, which is the *only* context that ever holds or uses
 /// a `PreparedStatement` (and therefore this wrapper).
 struct SQLiteStatementHandle: @unchecked Sendable {
-    let pointer: OpaquePointer
-    init(_ pointer: OpaquePointer) { self.pointer = pointer }
+	let pointer: OpaquePointer
+	init(_ pointer: OpaquePointer) { self.pointer = pointer }
 }

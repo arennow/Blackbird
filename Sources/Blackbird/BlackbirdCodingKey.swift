@@ -34,39 +34,37 @@
 import Foundation
 
 /// For BlackbirdModel to work with custom `CodingKeys`, their `CodingKeys` enum must be declared as: `enum CodingKeys: String, BlackbirdCodingKey`.
-public protocol BlackbirdCodingKey: RawRepresentable, CodingKey, CaseIterable where RawValue == String {
-}
+public protocol BlackbirdCodingKey: RawRepresentable, CodingKey, CaseIterable where RawValue == String {}
 
 extension BlackbirdCodingKey {
-    internal static var allLabeledCases: [String: String] {
-        var columnsToKeys: [String: String] = [:]
-        for c in allCases {
-            guard let value = Self(rawValue: c.stringValue) else { fatalError("Cannot parse CodingKey from string: \"\(c.stringValue)\"") }
-            guard let label = _getEnumCaseName(for: value) else { fatalError("Cannot get CodingKey label from string: \"\(c.stringValue)\"") }
-            columnsToKeys[label] = c.stringValue
-        }
-        return columnsToKeys
-    }
+	static var allLabeledCases: [String: String] {
+		var columnsToKeys: [String: String] = [:]
+		for c in allCases {
+			guard let value = Self(rawValue: c.stringValue) else { fatalError("Cannot parse CodingKey from string: \"\(c.stringValue)\"") }
+			guard let label = _getEnumCaseName(for: value) else { fatalError("Cannot get CodingKey label from string: \"\(c.stringValue)\"") }
+			columnsToKeys[label] = c.stringValue
+		}
+		return columnsToKeys
+	}
 
-    // This unfortunate hack is needed to get the name of a CodingKeys enum, e.g. in this example:
-    //
-    // struct CodingKeys: CodingKey {
-    //     case id = "customID"
-    // }
-    //
-    // ...getting the string "id" when supplied with the rawValue of "customID".
-    //
-    // The synthesis of CodingKeys breaks the normal methods of getting enum names, such as String(describing:).
-    //
-    // So this hack, based on compiler internals that could break in the future, comes from:
-    //  https://forums.swift.org/t/getting-the-name-of-a-swift-enum-value/35654/18
-    //
-    // If it ever breaks, and no other method arrives to get those names, Blackbird can't support custom CodingKeys.
-    //
-    @_silgen_name("swift_EnumCaseName") private static func _getEnumCaseNameInternal<T>(_ value: T) -> UnsafePointer<CChar>?
-    fileprivate static func _getEnumCaseName<T>(for value: T) -> String? {
-        guard let stringPtr = _getEnumCaseNameInternal(value) else { return nil }
-        return String(validatingCString: stringPtr)
-    }
+	// This unfortunate hack is needed to get the name of a CodingKeys enum, e.g. in this example:
+	//
+	// struct CodingKeys: CodingKey {
+	//     case id = "customID"
+	// }
+	//
+	// ...getting the string "id" when supplied with the rawValue of "customID".
+	//
+	// The synthesis of CodingKeys breaks the normal methods of getting enum names, such as String(describing:).
+	//
+	// So this hack, based on compiler internals that could break in the future, comes from:
+	//  https://forums.swift.org/t/getting-the-name-of-a-swift-enum-value/35654/18
+	//
+	// If it ever breaks, and no other method arrives to get those names, Blackbird can't support custom CodingKeys.
+	//
+	@_silgen_name("swift_EnumCaseName") private static func _getEnumCaseNameInternal(_ value: some Any) -> UnsafePointer<CChar>?
+	fileprivate static func _getEnumCaseName(for value: some Any) -> String? {
+		guard let stringPtr = _getEnumCaseNameInternal(value) else { return nil }
+		return String(validatingCString: stringPtr)
+	}
 }
-
