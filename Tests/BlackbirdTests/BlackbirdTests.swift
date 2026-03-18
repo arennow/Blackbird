@@ -36,7 +36,7 @@ import Testing
 @testable import Blackbird
 import Semaphore
 
-final class BlackbirdTests: @unchecked Sendable {
+final class BlackbirdTests {
     var sqliteFilename = ""
 
     init() throws {
@@ -793,12 +793,6 @@ final class BlackbirdTests: @unchecked Sendable {
         #expect(t.changedColumns(in: db).isEmpty)
     }
 
-    var _testChangeNotificationsExpectedChangedTable: String? = nil
-    var _testChangeNotificationsExpectedChangedKeys: Blackbird.PrimaryKeyValues? = nil
-    var _testChangeNotificationsExpectedChangedColumnNames: Blackbird.ColumnNames? = nil
-    var _testChangeNotificationsListeners: [Task<Void, Never>] = []
-    var _testChangeNotificationsCallCount = 0
-
     @Test
     func changeNotifications() async throws {
         let db = try Blackbird.Database(path: sqliteFilename, options: [.debugPrintEveryQuery, .debugPrintEveryReportedChange, .debugPrintQueryParameterValues])
@@ -806,36 +800,55 @@ final class BlackbirdTests: @unchecked Sendable {
         try await TestModel.resolveSchema(in: db)
         try await TestModelWithDescription.resolveSchema(in: db)
 
-        _testChangeNotificationsListeners.append(Task {
+        actor ChangeState {
+            var expectedTable: String? = nil
+            var expectedKeys: Blackbird.PrimaryKeyValues? = nil
+            var expectedColumnNames: Blackbird.ColumnNames? = nil
+            var callCount = 0
+
+            func setExpectedTable(_ v: String?) { expectedTable = v }
+            func setExpectedKeys(_ v: Blackbird.PrimaryKeyValues?) { expectedKeys = v }
+            func setExpectedColumnNames(_ v: Blackbird.ColumnNames?) { expectedColumnNames = v }
+            func setExpectedKeysAndColumnNames(_ k: Blackbird.PrimaryKeyValues?, _ c: Blackbird.ColumnNames?) {
+                expectedKeys = k
+                expectedColumnNames = c
+            }
+            func getExpectedKeysAndColumnNames() -> (Blackbird.PrimaryKeyValues?, Blackbird.ColumnNames?) {
+                (expectedKeys, expectedColumnNames)
+            }
+            func incrementCallCount() { callCount += 1 }
+        }
+        let state = ChangeState()
+
+        var listeners: [Task<Void, Never>] = []
+		defer {
+			for listener in listeners {
+				listener.cancel()
+			}
+		}
+
+        listeners.append(Task {
             for await change in TestModel.changeSequence(in: db) {
-                if let expectedTable = self._testChangeNotificationsExpectedChangedTable {
+                if let expectedTable = await state.expectedTable {
                     #expect(expectedTable == change.type.tableName, "Change listener called for incorrect table")
                 }
-                self._testChangeNotificationsCallCount += 1
+                await state.incrementCallCount()
             }
         })
 
-        _testChangeNotificationsListeners.append(Task {
+        listeners.append(Task {
             for await change in TestModelWithDescription.changeSequence(in: db) {
-                if change.primaryKeys == nil {
-                    #expect(self._testChangeNotificationsExpectedChangedKeys == nil)
-                } else {
-                    #expect(self._testChangeNotificationsExpectedChangedKeys == change.primaryKeys)
-                }
+                let (expectedKeys, expectedColumnNames) = await state.getExpectedKeysAndColumnNames()
+                #expect(expectedKeys == change.primaryKeys)
+				#expect(expectedColumnNames == change.columnNames)
 
-                if change.columnNames == nil {
-                    #expect(self._testChangeNotificationsExpectedChangedColumnNames == nil)
-                } else {
-                    #expect(self._testChangeNotificationsExpectedChangedColumnNames == change.columnNames)
-                }
-
-                self._testChangeNotificationsCallCount += 1
+                await state.incrementCallCount()
             }
         })
 
         var expectedChangeNotificationsCallCount = 0
 
-        _testChangeNotificationsExpectedChangedTable = "TestModelWithDescription"
+        await state.setExpectedTable("TestModelWithDescription")
 
         // Batched change notifications
         let count = min(TestData.URLs.count, TestData.titles.count, TestData.descriptions.count)
@@ -853,65 +866,57 @@ final class BlackbirdTests: @unchecked Sendable {
                 let m = TestModelWithDescription(id: i, url: TestData.URLs[i], title: TestData.titles[i], description: TestData.descriptions[i])
                 try m.writeIsolated(to: db, core: core)
             }
-            self._testChangeNotificationsExpectedChangedKeys = expectedBatchedKeys
-            self._testChangeNotificationsExpectedChangedColumnNames = Blackbird.ColumnNames(["id", "url", "title", "description"])
+            await state.setExpectedKeysAndColumnNames(expectedBatchedKeys, Blackbird.ColumnNames(["id", "url", "title", "description"]))
         }
         await megaYield()
         expectedChangeNotificationsCallCount += 1
-        #expect(_testChangeNotificationsCallCount == expectedChangeNotificationsCallCount)
+        #expect(await state.callCount == expectedChangeNotificationsCallCount)
 
         // Individual change notifications
         var m = try await TestModelWithDescription.read(from: db, id: 64)!
         m.title = "Edited title!"
-        _testChangeNotificationsExpectedChangedKeys = Blackbird.PrimaryKeyValues([[ .integer(64) ]])
-        _testChangeNotificationsExpectedChangedColumnNames = Blackbird.ColumnNames(["title"])
+        await state.setExpectedKeysAndColumnNames(Blackbird.PrimaryKeyValues([[ .integer(64) ]]), Blackbird.ColumnNames(["title"]))
         try await m.write(to: db)
         await megaYield()
         expectedChangeNotificationsCallCount += 1
-        #expect(_testChangeNotificationsCallCount == expectedChangeNotificationsCallCount)
+        #expect(await state.callCount == expectedChangeNotificationsCallCount)
 
         // Unspecified/whole-table change notifications, with structured column info
-        _testChangeNotificationsExpectedChangedKeys = Blackbird.PrimaryKeyValues(Array(0..<count).map { [try! Blackbird.Value.fromAny($0)] })
-        _testChangeNotificationsExpectedChangedColumnNames = Blackbird.ColumnNames(["url"])
+        await state.setExpectedKeysAndColumnNames(Blackbird.PrimaryKeyValues(Array(0..<count).map { [try! Blackbird.Value.fromAny($0)] }), Blackbird.ColumnNames(["url"]))
         try await TestModelWithDescription.update(in: db, set: [ \.$url : nil ], matching: .all)
         await megaYield()
         expectedChangeNotificationsCallCount += 1
-        #expect(_testChangeNotificationsCallCount == expectedChangeNotificationsCallCount)
+        #expect(await state.callCount == expectedChangeNotificationsCallCount)
 
         // Unspecified/whole-table delete notifications, with structured column info
-        _testChangeNotificationsExpectedChangedKeys = Blackbird.PrimaryKeyValues(Array(0..<5).map { [try! Blackbird.Value.fromAny($0)] })
-        _testChangeNotificationsExpectedChangedColumnNames = nil
+        await state.setExpectedKeysAndColumnNames(Blackbird.PrimaryKeyValues(Array(0..<5).map { [try! Blackbird.Value.fromAny($0)] }), nil)
         try await TestModelWithDescription.delete(from: db, matching: \.$id < 5)
         await megaYield()
         expectedChangeNotificationsCallCount += 1
-        #expect(_testChangeNotificationsCallCount == expectedChangeNotificationsCallCount)
+        #expect(await state.callCount == expectedChangeNotificationsCallCount)
 
         // Unspecified/whole-table change notifications, with structured column info and primary keys
-        _testChangeNotificationsExpectedChangedKeys = [[7], [8], [9]]
-        _testChangeNotificationsExpectedChangedColumnNames = Blackbird.ColumnNames(["url"])
+        await state.setExpectedKeysAndColumnNames([[7], [8], [9]], Blackbird.ColumnNames(["url"]))
         try await TestModelWithDescription.update(in: db, set: [ \.$url : nil ], forPrimaryKeys: [7, 8, 9])
         await megaYield()
         expectedChangeNotificationsCallCount += 1
-        #expect(_testChangeNotificationsCallCount == expectedChangeNotificationsCallCount)
+        #expect(await state.callCount == expectedChangeNotificationsCallCount)
 
         // Unspecified/whole-table change notifications, structured, but affecting 0 rows -- no change notification expected
-        _testChangeNotificationsExpectedChangedKeys = nil
-        _testChangeNotificationsExpectedChangedColumnNames = nil
+        await state.setExpectedKeysAndColumnNames(nil, nil)
         try await TestModelWithDescription.update(in: db, set: [ \.$url : nil ], matching: .all)
         await megaYield()
-        #expect(_testChangeNotificationsCallCount == expectedChangeNotificationsCallCount)
+        #expect(await state.callCount == expectedChangeNotificationsCallCount)
 
         // Unspecified/whole-table change notifications
-        _testChangeNotificationsExpectedChangedKeys = nil
-        _testChangeNotificationsExpectedChangedColumnNames = nil
+        await state.setExpectedKeysAndColumnNames(nil, nil)
         try await TestModelWithDescription.query(in: db, "UPDATE $T SET url = NULL")
         await megaYield()
         expectedChangeNotificationsCallCount += 1
-        #expect(_testChangeNotificationsCallCount == expectedChangeNotificationsCallCount)
+        #expect(await state.callCount == expectedChangeNotificationsCallCount)
 
         // Column-name merging
-        _testChangeNotificationsExpectedChangedKeys = Blackbird.PrimaryKeyValues([[ .integer(31) ], [ .integer(32) ]])
-        _testChangeNotificationsExpectedChangedColumnNames = Blackbird.ColumnNames(["title", "description"])
+        await state.setExpectedKeysAndColumnNames(Blackbird.PrimaryKeyValues([[ .integer(31) ], [ .integer(32) ]]), Blackbird.ColumnNames(["title", "description"]))
         try await db.transaction { core in
             var t1 = try TestModelWithDescription.readIsolated(from: db, core: core, id: 31)!
             t1.title = "Edited title!"
@@ -923,11 +928,10 @@ final class BlackbirdTests: @unchecked Sendable {
         }
         await megaYield()
         expectedChangeNotificationsCallCount += 1
-        #expect(_testChangeNotificationsCallCount == expectedChangeNotificationsCallCount)
+        #expect(await state.callCount == expectedChangeNotificationsCallCount)
 
         // Merging with insertions
-        _testChangeNotificationsExpectedChangedKeys = Blackbird.PrimaryKeyValues([[ .integer(40) ], [ .integer(Int64(count) + 1) ]])
-        _testChangeNotificationsExpectedChangedColumnNames = Blackbird.ColumnNames(["id", "title", "description", "url"])
+        await state.setExpectedKeysAndColumnNames(Blackbird.PrimaryKeyValues([[ .integer(40) ], [ .integer(Int64(count) + 1) ]]), Blackbird.ColumnNames(["id", "title", "description", "url"]))
         try await db.transaction { core in
             var t1 = try TestModelWithDescription.readIsolated(from: db, core: core, id: 40)!
             t1.title = "Edited title!"
@@ -938,11 +942,10 @@ final class BlackbirdTests: @unchecked Sendable {
         }
         await megaYield()
         expectedChangeNotificationsCallCount += 1
-        #expect(_testChangeNotificationsCallCount == expectedChangeNotificationsCallCount)
+        #expect(await state.callCount == expectedChangeNotificationsCallCount)
 
         // Merging with deletions
-        _testChangeNotificationsExpectedChangedKeys = Blackbird.PrimaryKeyValues([[ .integer(50) ], [ .integer(51) ]])
-        _testChangeNotificationsExpectedChangedColumnNames = Blackbird.ColumnNames(["id", "title", "description", "url"])
+        await state.setExpectedKeysAndColumnNames(Blackbird.PrimaryKeyValues([[ .integer(50) ], [ .integer(51) ]]), Blackbird.ColumnNames(["id", "title", "description", "url"]))
         try await db.transaction { core in
             var t1 = try TestModelWithDescription.readIsolated(from: db, core: core, id: 50)!
             t1.title = "Edited title!"
@@ -953,11 +956,10 @@ final class BlackbirdTests: @unchecked Sendable {
         }
         await megaYield()
         expectedChangeNotificationsCallCount += 1
-        #expect(_testChangeNotificationsCallCount == expectedChangeNotificationsCallCount)
+        #expect(await state.callCount == expectedChangeNotificationsCallCount)
 
         // Merging with table-wide updates
-        _testChangeNotificationsExpectedChangedKeys = nil
-        _testChangeNotificationsExpectedChangedColumnNames = nil
+        await state.setExpectedKeysAndColumnNames(nil, nil)
         try await db.transaction { core in
             var t1 = try TestModelWithDescription.readIsolated(from: db, core: core, id: 60)!
             t1.title = "Edited title!"
@@ -967,17 +969,16 @@ final class BlackbirdTests: @unchecked Sendable {
         }
         await megaYield()
         expectedChangeNotificationsCallCount += 1
-        #expect(_testChangeNotificationsCallCount == expectedChangeNotificationsCallCount)
+        #expect(await state.callCount == expectedChangeNotificationsCallCount)
 
         // ------- Should be the last test in this func since it deletes the entire table -------
         // The SQLite truncate optimization: https://www.sqlite.org/lang_delete.html#the_truncate_optimization
-        _testChangeNotificationsExpectedChangedTable = nil
-        _testChangeNotificationsExpectedChangedKeys = nil
-        _testChangeNotificationsExpectedChangedColumnNames = nil
+        await state.setExpectedTable(nil)
+        await state.setExpectedKeysAndColumnNames(nil, nil)
         try await TestModelWithDescription.query(in: db, "DELETE FROM $T")
         await megaYield()
         expectedChangeNotificationsCallCount += 2 // will trigger a full-database change notification, so it'll report 2 table changes: TestModel and TestModelWithDescription
-        #expect(_testChangeNotificationsCallCount == expectedChangeNotificationsCallCount)
+        #expect(await state.callCount == expectedChangeNotificationsCallCount)
     }
 
     @Test
