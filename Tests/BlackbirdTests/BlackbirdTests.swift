@@ -1111,22 +1111,18 @@ final class BlackbirdTests: IBLoggable {
 	@Test
 	func concurrentTransactions() async throws {
 		let db = try Blackbird.Database(path: self.sqliteFilename)
-		let semaphore = AsyncSemaphore(value: 0)
 
-		let numTasks = 1000
-
-		for i in 0..<numTasks {
-			Task {
-				try! await db.transaction { core in
-					try? await Task.sleep(nanoseconds: UInt64(arc4random_uniform(10_000_000)))
-					try! TestModel(id: Int64(i), title: TestData.randomTitle, url: TestData.randomURL).writeIsolated(to: db, core: core)
+		try await withThrowingTaskGroup { tg in
+			for i in 0..<1000 {
+				tg.addTask {
+					try await db.transaction { core in
+						try await Task.sleep(nanoseconds: UInt64(arc4random_uniform(10_000)))
+						try TestModel(id: Int64(i), title: TestData.randomTitle, url: TestData.randomURL).writeIsolated(to: db, core: core)
+					}
 				}
-				semaphore.signal()
 			}
-		}
 
-		for _ in 0..<numTasks {
-			await semaphore.wait()
+			try await tg.waitForAll()
 		}
 	}
 
