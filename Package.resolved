@@ -1,5 +1,5 @@
 {
-  "originHash" : "f9c8fe7ee2e240a9d37fa5e3776e7aed12d4c61eac8bec2ce4b63d04af7be1e0",
+  "originHash" : "e16def3e25ba519f53879b35f63d893d821650d4dbc0ef6ffbb7c5369bffb785",
   "pins" : [
     {
       "identity" : "asyncextensions",
@@ -8,6 +8,15 @@
       "state" : {
         "revision" : "c2b32caf189993285b5a782fe7cd658ed1fa9b9a",
         "version" : "0.5.5"
+      }
+    },
+    {
+      "identity" : "loggable",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/arennow/Loggable.git",
+      "state" : {
+        "branch" : "2.0.0-beta",
+        "revision" : "713df4ed0dca08aefc177bb6f7009ea4078c87d4"
       }
     },
     {
@@ -26,6 +35,15 @@
       "state" : {
         "revision" : "8d9834a6189db730f6264db7556a7ffb751e99ee",
         "version" : "1.4.0"
+      }
+    },
+    {
+      "identity" : "swift-log",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/apple/swift-log.git",
+      "state" : {
+        "revision" : "bbd81b6725ae874c69e9b8c8804d462356b55523",
+        "version" : "1.10.1"
       }
     }
   ],

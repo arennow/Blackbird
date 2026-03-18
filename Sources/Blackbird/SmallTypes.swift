@@ -53,3 +53,10 @@ struct SQLiteStatementHandle: @unchecked Sendable {
 	let pointer: OpaquePointer
 	init(_ pointer: OpaquePointer) { self.pointer = pointer }
 }
+
+import Loggable
+
+protocol IBLoggable: Loggable {}
+extension IBLoggable {
+	public static var loggerSubsystem: String { "com.lithumcube.ironbird" }
+}

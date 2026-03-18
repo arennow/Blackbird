@@ -16,12 +16,14 @@ let package = Package(name: "Blackbird",
 					  dependencies: [
 					  	.package(url: "https://github.com/sideeffect-io/AsyncExtensions.git", .upToNextMajor(from: "0.5.3")),
 					  	.package(url: "https://github.com/groue/Semaphore.git", .upToNextMajor(from: "0.0.4")),
+					  	.package(url: "https://github.com/arennow/Loggable.git", branch: "2.0.0-beta"),
 					  ],
 					  targets: [
 					  	.target(name: "Blackbird",
 								  dependencies: [
 								  	"AsyncExtensions",
 								  	"Semaphore",
+								  	"Loggable",
 								  ]),
 					  	.testTarget(name: "BlackbirdTests",
 									  dependencies: [

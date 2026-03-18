@@ -33,10 +33,11 @@
 
 @testable import Blackbird
 import Foundation
+import Loggable
 import Semaphore
 import Testing
 
-final class BlackbirdTests {
+final class BlackbirdTests: IBLoggable {
 	var sqliteFilename = ""
 
 	init() throws {
@@ -167,7 +168,7 @@ final class BlackbirdTests {
 	@Test
 	func queries() async throws {
 		let allFilenames = Blackbird.Database.allFilePaths(for: self.sqliteFilename)
-		print("SQLite filenames:\n\(allFilenames.joined(separator: "\n"))")
+		Self.logger.debug("SQLite filenames:\n\(allFilenames.joined(separator: "\n"))")
 
 		let db = try Blackbird.Database(path: self.sqliteFilename, options: [.debugPrintEveryQuery, .debugPrintQueryParameterValues, .debugPrintEveryReportedChange])
 		let count = min(TestData.URLs.count, TestData.titles.count, TestData.descriptions.count)
@@ -421,7 +422,7 @@ final class BlackbirdTests {
 
 		let encoder = JSONEncoder()
 		let json = try encoder.encode(results)
-		print("json: \(String(data: json, encoding: .utf8), default: "<INVALID JSON>")")
+		Self.logger.debug("json: \(String(data: json, encoding: .utf8), default: "<INVALID JSON>")")
 
 		let decoder = JSONDecoder()
 		let decoded = try decoder.decode([TestModel].self, from: json)
@@ -1213,7 +1214,7 @@ final class BlackbirdTests {
 		try await heavyWorkload()
 		try await changeNotifications()
 		let duration = abs(startTime.timeIntervalSinceNow)
-		print("took \(duration) seconds")
+		Self.logger.debug("took \(duration) seconds")
 
 		//        measure {
 		//            let exp = expectation(description: "Finished")
@@ -1294,7 +1295,7 @@ final class BlackbirdTests {
 			try await TestModel(id: Int64(i), title: TestData.randomTitle, url: TestData.randomURL).write(to: db)
 		}
 		let backupFilePath = self.sqliteFilename + ".backup"
-		print("Creating backup at \(backupFilePath)")
+		Self.logger.debug("Creating backup at \(backupFilePath)")
 
 		defer {
 			for path in Blackbird.Database.allFilePaths(for: backupFilePath) {

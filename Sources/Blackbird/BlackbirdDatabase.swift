@@ -32,6 +32,7 @@
 //
 
 import Foundation
+import Loggable
 import Semaphore
 import SQLite3
 import Synchronization
@@ -237,16 +238,16 @@ public extension Blackbird {
 			/// Monitor for changes to the database file from outside of this connection, such as from a different process or a different SQLite library within the same process.
 			public static let monitorForExternalChanges = Options(rawValue: 1 << 2)
 
-			/// Logs every query with `print()`. Useful for debugging.
+			/// Logs every query. Useful for debugging.
 			public static let debugPrintEveryQuery = Options(rawValue: 1 << 3)
 
 			/// When using ``debugPrintEveryQuery``, parameterized query values will be included in the logged query strings instead of their placeholders. Useful for debugging.
 			public static let debugPrintQueryParameterValues = Options(rawValue: 1 << 4)
 
-			/// Logs every change reported by ``Blackbird/ChangeSequence`` instances for this database with `print()`. Useful for debugging.
+			/// Logs every change reported by ``Blackbird/ChangeSequence`` instances for this database. Useful for debugging.
 			public static let debugPrintEveryReportedChange = Options(rawValue: 1 << 5)
 
-			/// Logs cache hits and misses with `print()`. Useful for debugging.
+			/// Logs cache hits and misses. Useful for debugging.
 			public static let debugPrintCacheActivity = Options(rawValue: 1 << 6)
 
 			/// Require the calling of ``BlackbirdModel/resolveSchema(in:)`` before any queries to a `BlackbirdModel` type.
@@ -499,6 +500,9 @@ public extension Blackbird {
 				let isReadOnly: Bool
 			}
 
+			private static let queryLogger = Logger.with(subsystem: Blackbird.loggingSubsystem, category: "DatabaseQuery")
+			private static let generalLogger = Logger.with(subsystem: Blackbird.loggingSubsystem, category: "DatabaseGeneral")
+
 			private var debugPrintEveryQuery = false
 			private var debugPrintQueryParameterValues = false
 
@@ -565,7 +569,7 @@ public extension Blackbird {
 
 			func checkForExternalDatabaseChange() {
 				guard let dataVersionStmt else { return }
-				if self.debugPrintEveryQuery { print("[Blackbird.Database] PRAGMA data_version") }
+				if self.debugPrintEveryQuery { Self.queryLogger.debug("PRAGMA data_version") }
 
 				var newVersion: Int64 = 0
 				if SQLITE_ROW == sqlite3_step(dataVersionStmt) { newVersion = sqlite3_column_int64(dataVersionStmt, 0) }
@@ -676,7 +680,7 @@ public extension Blackbird {
 			}
 
 			public func execute(_ query: String) throws {
-				if self.debugPrintEveryQuery { print("[Blackbird.Database] \(query)") }
+				if self.debugPrintEveryQuery { Self.queryLogger.debug("\(query)") }
 				if self.isClosed { throw Error.databaseIsClosed }
 
 				let spState = self.perfLog.begin(signpost: .execute, message: query)
@@ -784,9 +788,9 @@ public extension Blackbird {
 			private func rowsByExecutingPreparedStatement(_ statement: PreparedStatement, from query: String) throws -> [Blackbird.Row] {
 				if self.debugPrintEveryQuery {
 					if self.debugPrintQueryParameterValues, let cStr = sqlite3_expanded_sql(statement.handle.pointer), let expandedQuery = String(cString: cStr, encoding: .utf8) {
-						print("[Blackbird.Database] \(expandedQuery)")
+						Self.queryLogger.debug("\(expandedQuery)")
 					} else {
-						print("[Blackbird.Database] \(query)")
+						Self.queryLogger.debug("\(query)")
 					}
 				}
 				let statementHandle = statement.handle.pointer
@@ -911,7 +915,7 @@ public extension Blackbird {
 						let remainingPages = sqlite3_backup_remaining(backup)
 						let totalPages = sqlite3_backup_pagecount(backup)
 						let backedUpPages = totalPages - remainingPages
-						print("Backed up \(backedUpPages) pages of \(totalPages)")
+						Self.generalLogger.debug("Backed up \(backedUpPages) pages of \(totalPages)")
 					}
 
 					await Task.yield()

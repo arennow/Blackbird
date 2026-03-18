@@ -31,6 +31,8 @@
 //  SOFTWARE.
 //
 
+import Logging
+
 extension PartialKeyPath: @retroactive @unchecked Sendable {}
 
 public extension String.StringInterpolation {
@@ -199,6 +201,8 @@ struct DecodedStructuredQuery {
 	}
 }
 
+fileprivate let sharedModelCacheLogger = Logger.with(subsystem: Blackbird.loggingSubsystem, category: "ModelCache")
+
 public extension BlackbirdModel {
 	fileprivate static func _cacheableStructuredResult<T: Sendable>(database: Blackbird.Database, decoded: DecodedStructuredQuery, resultFetcher: ((Blackbird.Database) async throws -> T)) async throws -> T {
 		let cacheLimit = Self.cacheLimit
@@ -207,12 +211,12 @@ public extension BlackbirdModel {
 		let logActivity = database.options.contains(.debugPrintCacheActivity)
 
 		if let cachedResult = database.cache.readQueryResult(tableName: decoded.tableName, cacheKey: cacheKey) as? T {
-			if logActivity { print("[BlackbirdModel] ++ Cache hit: \(cacheKey)") }
+			if logActivity { sharedModelCacheLogger.debug("[BlackbirdModel] ++ Cache hit: \(cacheKey)") }
 			return cachedResult
 		}
 
 		let result = try await resultFetcher(database)
-		if logActivity { print("[BlackbirdModel] -- Cache write: \(cacheKey)") }
+		if logActivity { sharedModelCacheLogger.debug("[BlackbirdModel] -- Cache write: \(cacheKey)") }
 		database.cache.writeQueryResult(tableName: decoded.tableName, cacheKey: cacheKey, result: result, entryLimit: cacheLimit)
 		return result
 	}

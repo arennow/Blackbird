@@ -32,6 +32,7 @@
 //
 
 import Foundation
+import Loggable
 import Synchronization
 
 public extension Blackbird.Database {
@@ -46,18 +47,19 @@ public extension Blackbird.Database {
 		public let lowMemoryFlushes: Int
 	}
 
+	private static let cacheLogger = Logger.with(subsystem: Blackbird.loggingSubsystem, category: "DatabaseCache")
+
 	func cachePerformanceMetricsByTableName() -> [String: CachePerformanceMetrics] { cache.performanceMetrics() }
 	func resetCachePerformanceMetrics(tableName: String) { cache.resetPerformanceMetrics(tableName: tableName) }
 
 	func debugPrintCachePerformanceMetrics() {
-		print("===== Blackbird.Database cache performance metrics =====")
 		for (tableName, metrics) in cache.performanceMetrics() {
 			let totalRequests = metrics.hits + metrics.misses
 			let hitPercentStr =
 				totalRequests == 0 ? "0%" :
 				"\(Int(100.0 * Double(metrics.hits) / Double(totalRequests)))%"
 
-			print("\(tableName): \(metrics.hits) hits (\(hitPercentStr)), \(metrics.misses) misses, \(metrics.writes) writes, \(metrics.rowInvalidations) row invalidations, \(metrics.queryInvalidations) query invalidations, \(metrics.tableInvalidations) table invalidations, \(metrics.evictions) evictions, \(metrics.lowMemoryFlushes) low-memory flushes")
+			Self.cacheLogger.debug("\(tableName): \(metrics.hits) hits (\(hitPercentStr)), \(metrics.misses) misses, \(metrics.writes) writes, \(metrics.rowInvalidations) row invalidations, \(metrics.queryInvalidations) query invalidations, \(metrics.tableInvalidations) table invalidations, \(metrics.evictions) evictions, \(metrics.lowMemoryFlushes) low-memory flushes")
 		}
 	}
 

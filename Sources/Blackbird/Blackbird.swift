@@ -37,7 +37,7 @@ import SQLite3
 import Synchronization
 
 /// A small, fast, lightweight SQLite database wrapper and model layer.
-public class Blackbird {
+public enum Blackbird {
 	/// A dictionary of argument values for a database query, keyed by column names.
 	public typealias Arguments = Dictionary<String, Blackbird.Value>
 

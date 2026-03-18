@@ -33,6 +33,7 @@
 
 import AsyncExtensions
 import Foundation
+import Loggable
 import Synchronization
 
 public extension Blackbird {
@@ -170,7 +171,7 @@ extension Blackbird.Database {
 	/// > - Changes may be over-reported.
 	public func changeSequence(for tableName: String) -> Blackbird.ChangeSequence { changeReporter.changeSequence(for: tableName) }
 
-	final class ChangeReporter: Sendable {
+	final class ChangeReporter: Sendable, IBLoggable {
 		struct AccumulatedChanges {
 			var primaryKeys: Blackbird.PrimaryKeyValues? = Blackbird.PrimaryKeyValues()
 			var columnNames: Blackbird.ColumnNames? = Blackbird.ColumnNames()
@@ -247,7 +248,7 @@ extension Blackbird.Database {
 		}
 
 		func reportEntireDatabaseChange() {
-			if self.debugPrintEveryReportedChange { print("[Blackbird.ChangeReporter] ⚠️ database changed externally, reporting changes to all tables!") }
+			if self.debugPrintEveryReportedChange { Self.logger.debug("Database changed externally, reporting changes to all tables") }
 			self.cache.invalidate()
 
 			let needsFlush = self.state.withLock { s in
@@ -300,11 +301,11 @@ extension Blackbird.Database {
 			for (tableName, accumulatedChanges) in changesByTable {
 				if let keys = accumulatedChanges.primaryKeys {
 					if self.debugPrintEveryReportedChange {
-						print("[Blackbird.ChangeReporter] changed \(tableName) (\(keys.count) keys, fields: \(accumulatedChanges.columnNames?.joined(separator: ",") ?? "(all/unknown)"))")
+						Self.logger.debug("Changed \(tableName) (\(keys.count) keys, fields: \(accumulatedChanges.columnNames?.joined(separator: ",") ?? "(all/unknown)"))")
 					}
 					if let sequence = subjects[tableName] { sequence.send(Blackbird.Change(table: tableName, primaryKeys: keys, columnNames: accumulatedChanges.columnNames)) }
 				} else {
-					if self.debugPrintEveryReportedChange { print("[Blackbird.ChangeReporter] changed \(tableName) (unknown keys, fields: \(accumulatedChanges.columnNames?.joined(separator: ",") ?? "(all/unknown)"))") }
+					if self.debugPrintEveryReportedChange { Self.logger.debug("Changed \(tableName) (unknown keys, fields: \(accumulatedChanges.columnNames?.joined(separator: ",") ?? "(all/unknown)"))") }
 					if let sequence = subjects[tableName] { sequence.send(Blackbird.Change(table: tableName, primaryKeys: nil, columnNames: accumulatedChanges.columnNames)) }
 				}
 			}
