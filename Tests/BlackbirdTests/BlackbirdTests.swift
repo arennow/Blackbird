@@ -421,7 +421,7 @@ final class BlackbirdTests {
 
 		let encoder = JSONEncoder()
 		let json = try encoder.encode(results)
-		print("json: \(String(data: json, encoding: .utf8))")
+		print("json: \(String(data: json, encoding: .utf8), default: "<INVALID JSON>")")
 
 		let decoder = JSONDecoder()
 		let decoded = try decoder.decode([TestModel].self, from: json)
@@ -1129,96 +1129,91 @@ final class BlackbirdTests {
 		}
 	}
 
-	@Test
+	@Test(CacheLimit(testModel: 10_000))
 	func cache() async throws {
-		try await CacheLimitScope(testModel: 10_000).run {
-			let db = try Blackbird.Database(path: self.sqliteFilename)
+		let db = try Blackbird.Database(path: self.sqliteFilename)
 
-			// big block of writes to populate the DB
-			let lastURL = try await db.transaction { core in
-				var lastURL: URL?
-				for i in 0..<1000 {
-					let t = TestModel(id: Int64(i), title: TestData.randomTitle, url: TestData.randomURL, nonColumn: TestData.randomDescription)
-					try t.writeIsolated(to: db, core: core)
-					lastURL = t.url
-				}
-				return try #require(lastURL)
+		// big block of writes to populate the DB
+		let lastURL = try await db.transaction { core in
+			var lastURL: URL?
+			for i in 0..<1000 {
+				let t = TestModel(id: Int64(i), title: TestData.randomTitle, url: TestData.randomURL, nonColumn: TestData.randomDescription)
+				try t.writeIsolated(to: db, core: core)
+				lastURL = t.url
 			}
-
-			db.resetCachePerformanceMetrics(tableName: TestModel.tableName)
-			var t = try #require(await TestModel.read(from: db, id: 1))
-			#expect(db.cachePerformanceMetricsByTableName()[TestModel.tableName]?.misses == 0)
-			#expect(db.cachePerformanceMetricsByTableName()[TestModel.tableName]?.hits == 1)
-
-			db.resetCachePerformanceMetrics(tableName: TestModel.tableName)
-			t.title = "new"
-			try await t.write(to: db)
-			#expect(db.cachePerformanceMetricsByTableName()[TestModel.tableName]?.writes == 1)
-			#expect(db.cachePerformanceMetricsByTableName()[TestModel.tableName]?.rowInvalidations == 1)
-			#expect(db.cachePerformanceMetricsByTableName()[TestModel.tableName]?.tableInvalidations == 0)
-
-			db.resetCachePerformanceMetrics(tableName: TestModel.tableName)
-			t = try #require(await TestModel.read(from: db, id: 1))
-			#expect(t.title == "new")
-			#expect(db.cachePerformanceMetricsByTableName()[TestModel.tableName]?.misses == 0)
-			#expect(db.cachePerformanceMetricsByTableName()[TestModel.tableName]?.hits == 1)
-
-			db.resetCachePerformanceMetrics(tableName: TestModel.tableName)
-			try await db.query("UPDATE TestModel SET title = 'new2' WHERE id = 1")
-			t = try #require(await TestModel.read(from: db, id: 1))
-			#expect(t.title == "new2")
-			#expect(db.cachePerformanceMetricsByTableName()[TestModel.tableName]?.misses == 1)
-			#expect(db.cachePerformanceMetricsByTableName()[TestModel.tableName]?.hits == 0)
-			#expect(db.cachePerformanceMetricsByTableName()[TestModel.tableName]?.rowInvalidations == 0)
-			#expect(db.cachePerformanceMetricsByTableName()[TestModel.tableName]?.tableInvalidations == 1)
-
-			db.resetCachePerformanceMetrics(tableName: TestModel.tableName)
-			try await TestModel.update(in: db, set: [\.$title: "new2"], matching: \.$id == 1)
-			t = try #require(await TestModel.read(from: db, id: 1))
-			#expect(db.cachePerformanceMetricsByTableName()[TestModel.tableName]?.misses == 0)
-			#expect(db.cachePerformanceMetricsByTableName()[TestModel.tableName]?.hits == 1)
-
-			db.resetCachePerformanceMetrics(tableName: TestModel.tableName)
-			try await TestModel.update(in: db, set: [\.$title: "new3"], matching: \.$id < 10)
-			t = try #require(await TestModel.read(from: db, id: 1))
-			#expect(t.title == "new3")
-			#expect(db.cachePerformanceMetricsByTableName()[TestModel.tableName]?.misses == 1)
-			#expect(db.cachePerformanceMetricsByTableName()[TestModel.tableName]?.hits == 0)
-
-			db.resetCachePerformanceMetrics(tableName: TestModel.tableName)
-			var titleMatch = try await TestModel.query(in: db, columns: [\.$title], matching: \.$url == lastURL)
-			#expect(!titleMatch.isEmpty)
-			#expect(db.cachePerformanceMetricsByTableName()[TestModel.tableName]?.misses == 1)
-			#expect(db.cachePerformanceMetricsByTableName()[TestModel.tableName]?.hits == 0)
-			titleMatch = try await TestModel.query(in: db, columns: [\.$title], matching: \.$url == lastURL)
-			#expect(!titleMatch.isEmpty)
-			#expect(db.cachePerformanceMetricsByTableName()[TestModel.tableName]?.misses == 1)
-			#expect(db.cachePerformanceMetricsByTableName()[TestModel.tableName]?.hits == 1)
-
-			t.id = 9998
-			try await t.write(to: db)
-			#expect(db.cachePerformanceMetricsByTableName()[TestModel.tableName]?.queryInvalidations == 1)
-			#expect(db.cachePerformanceMetricsByTableName()[TestModel.tableName]?.rowInvalidations == 0)
-			#expect(db.cachePerformanceMetricsByTableName()[TestModel.tableName]?.tableInvalidations == 0)
-
-			try await TestModel.update(in: db, set: [\.$id: 9999], matching: \.$id == 1)
-			#expect(db.cachePerformanceMetricsByTableName()[TestModel.tableName]?.queryInvalidations == 1)
-			#expect(db.cachePerformanceMetricsByTableName()[TestModel.tableName]?.rowInvalidations == 0)
-			#expect(db.cachePerformanceMetricsByTableName()[TestModel.tableName]?.tableInvalidations == 0)
+			return try #require(lastURL)
 		}
+
+		db.resetCachePerformanceMetrics(tableName: TestModel.tableName)
+		var t = try #require(await TestModel.read(from: db, id: 1))
+		#expect(db.cachePerformanceMetricsByTableName()[TestModel.tableName]?.misses == 0)
+		#expect(db.cachePerformanceMetricsByTableName()[TestModel.tableName]?.hits == 1)
+
+		db.resetCachePerformanceMetrics(tableName: TestModel.tableName)
+		t.title = "new"
+		try await t.write(to: db)
+		#expect(db.cachePerformanceMetricsByTableName()[TestModel.tableName]?.writes == 1)
+		#expect(db.cachePerformanceMetricsByTableName()[TestModel.tableName]?.rowInvalidations == 1)
+		#expect(db.cachePerformanceMetricsByTableName()[TestModel.tableName]?.tableInvalidations == 0)
+
+		db.resetCachePerformanceMetrics(tableName: TestModel.tableName)
+		t = try #require(await TestModel.read(from: db, id: 1))
+		#expect(t.title == "new")
+		#expect(db.cachePerformanceMetricsByTableName()[TestModel.tableName]?.misses == 0)
+		#expect(db.cachePerformanceMetricsByTableName()[TestModel.tableName]?.hits == 1)
+
+		db.resetCachePerformanceMetrics(tableName: TestModel.tableName)
+		try await db.query("UPDATE TestModel SET title = 'new2' WHERE id = 1")
+		t = try #require(await TestModel.read(from: db, id: 1))
+		#expect(t.title == "new2")
+		#expect(db.cachePerformanceMetricsByTableName()[TestModel.tableName]?.misses == 1)
+		#expect(db.cachePerformanceMetricsByTableName()[TestModel.tableName]?.hits == 0)
+		#expect(db.cachePerformanceMetricsByTableName()[TestModel.tableName]?.rowInvalidations == 0)
+		#expect(db.cachePerformanceMetricsByTableName()[TestModel.tableName]?.tableInvalidations == 1)
+
+		db.resetCachePerformanceMetrics(tableName: TestModel.tableName)
+		try await TestModel.update(in: db, set: [\.$title: "new2"], matching: \.$id == 1)
+		t = try #require(await TestModel.read(from: db, id: 1))
+		#expect(db.cachePerformanceMetricsByTableName()[TestModel.tableName]?.misses == 0)
+		#expect(db.cachePerformanceMetricsByTableName()[TestModel.tableName]?.hits == 1)
+
+		db.resetCachePerformanceMetrics(tableName: TestModel.tableName)
+		try await TestModel.update(in: db, set: [\.$title: "new3"], matching: \.$id < 10)
+		t = try #require(await TestModel.read(from: db, id: 1))
+		#expect(t.title == "new3")
+		#expect(db.cachePerformanceMetricsByTableName()[TestModel.tableName]?.misses == 1)
+		#expect(db.cachePerformanceMetricsByTableName()[TestModel.tableName]?.hits == 0)
+
+		db.resetCachePerformanceMetrics(tableName: TestModel.tableName)
+		var titleMatch = try await TestModel.query(in: db, columns: [\.$title], matching: \.$url == lastURL)
+		#expect(!titleMatch.isEmpty)
+		#expect(db.cachePerformanceMetricsByTableName()[TestModel.tableName]?.misses == 1)
+		#expect(db.cachePerformanceMetricsByTableName()[TestModel.tableName]?.hits == 0)
+		titleMatch = try await TestModel.query(in: db, columns: [\.$title], matching: \.$url == lastURL)
+		#expect(!titleMatch.isEmpty)
+		#expect(db.cachePerformanceMetricsByTableName()[TestModel.tableName]?.misses == 1)
+		#expect(db.cachePerformanceMetricsByTableName()[TestModel.tableName]?.hits == 1)
+
+		t.id = 9998
+		try await t.write(to: db)
+		#expect(db.cachePerformanceMetricsByTableName()[TestModel.tableName]?.queryInvalidations == 1)
+		#expect(db.cachePerformanceMetricsByTableName()[TestModel.tableName]?.rowInvalidations == 0)
+		#expect(db.cachePerformanceMetricsByTableName()[TestModel.tableName]?.tableInvalidations == 0)
+
+		try await TestModel.update(in: db, set: [\.$id: 9999], matching: \.$id == 1)
+		#expect(db.cachePerformanceMetricsByTableName()[TestModel.tableName]?.queryInvalidations == 1)
+		#expect(db.cachePerformanceMetricsByTableName()[TestModel.tableName]?.rowInvalidations == 0)
+		#expect(db.cachePerformanceMetricsByTableName()[TestModel.tableName]?.tableInvalidations == 0)
 	}
 
-	@Test
+	@Test(CacheLimit(testModel: 10_000))
 	func cacheSpeed() async throws {
-		let cacheEnabled = true
-		try await CacheLimitScope(testModel: cacheEnabled ? 10_000 : 0).run {
-			let startTime = Date()
-			try await queries()
-			try await heavyWorkload()
-			try await changeNotifications()
-			let duration = abs(startTime.timeIntervalSinceNow)
-			print("took \(duration) seconds")
-		}
+		let startTime = Date()
+		try await queries()
+		try await heavyWorkload()
+		try await changeNotifications()
+		let duration = abs(startTime.timeIntervalSinceNow)
+		print("took \(duration) seconds")
 
 		//        measure {
 		//            let exp = expectation(description: "Finished")

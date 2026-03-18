@@ -1,11 +1,7 @@
 @testable import Blackbird
-import Foundation
+import Testing
 
-protocol TestScoping {
-	func run(_ body: () async throws -> Void) async throws
-}
-
-struct CacheLimitScope: TestScoping {
+struct CacheLimit: TestTrait, TestScoping {
 	let testModelLimit: Int
 	let testModelWithDescriptionLimit: Int
 
@@ -14,10 +10,10 @@ struct CacheLimitScope: TestScoping {
 		self.testModelWithDescriptionLimit = testModelWithDescription ?? testModel
 	}
 
-	func run(_ body: () async throws -> Void) async throws {
+	func provideScope(for test: Test, testCase: Test.Case?, performing function: () async throws -> Void) async throws {
 		try await TestModel.$cacheLimit.withValue(self.testModelLimit) {
 			try await TestModelWithDescription.$cacheLimit.withValue(self.testModelWithDescriptionLimit) {
-				try await body()
+				try await function()
 			}
 		}
 	}
