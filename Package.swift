@@ -32,5 +32,8 @@ let package = Package(name: "Blackbird",
 									  dependencies: [
 									  	"Blackbird",
 									  	"Semaphore",
+									  ],
+									  swiftSettings: [
+									  	.enableUpcomingFeature("MemberImportVisibility"),
 									  ]),
 					  ])
