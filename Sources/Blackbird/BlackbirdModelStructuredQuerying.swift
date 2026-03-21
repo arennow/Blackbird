@@ -31,6 +31,7 @@
 //  SOFTWARE.
 //
 
+import Loggable
 import Logging
 
 extension PartialKeyPath: @retroactive @unchecked Sendable {}

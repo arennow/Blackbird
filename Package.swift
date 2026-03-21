@@ -24,6 +24,9 @@ let package = Package(name: "Blackbird",
 								  	"AsyncExtensions",
 								  	"Semaphore",
 								  	"Loggable",
+								  ],
+								  swiftSettings: [
+								  	.enableUpcomingFeature("MemberImportVisibility"),
 								  ]),
 					  	.testTarget(name: "BlackbirdTests",
 									  dependencies: [
