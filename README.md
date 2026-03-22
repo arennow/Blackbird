@@ -11,13 +11,14 @@ Philosophy:
 * Async by default.
 * Use Swift’s type system and key-paths instead of strings whenever possible.
  
-## Project status
+## Project Origin
 
-Ironbird is a __beta__.
+Ironbird is fork of Marco Arment's excellent [Blackbird](https://github.com/marcoarment/Blackbird) library. This project differs from Marco's in a few ways:
 
-Minor changes may still occur that break backwards compatibility with code or databases.
-
-I'm using Ironbird in shipping software now, but do so at your own risk.
+- It supports explicit migrations in addition to implicit migrations **(coming soon)**
+- Models can optionally use the typessafe `IronbirdUUID` macro **(coming soon)**
+- It's in the Swift 6 language mode with full modern Swift Concurrency
+- I removed the SwiftUI-specific featureset (see the FAQ entry)
 
 ## IronbirdModel
 
@@ -167,52 +168,8 @@ try await db.transaction { core in
 
 ## FAQ
 
-### why is it called ironbird
+### Why don't you have a SwiftUI property wrapper?
+I consider that to be an anti-feature. Fetching data directly into the view layer makes it hard-to-impossible to test the behavior (and therefore much less likely that you'll add testing as your feature grows in complexity). It also opens up a significant avenue for hard-to-detect bugs: any number of things can cause a view-updating SwiftUI property wrapper to not actually update the view it's installed on (or to do so too much). But an `@Observable` class held as `@State` in a SwiftUI view relies only on Apple to maintain the code to propertly update views when the data changes _and_ it's trivially unit testable, so I consider that to be the proper way to fetch data to populate a view. If this feature is important to you, it exists in the project Ironbird was forked from, [Blackbird](https://github.com/marcoarment/Blackbird), or feel free to make your own fork.
 
-[The plane](https://en.wikipedia.org/wiki/Lockheed_SR-71_Ironbird), of course.
-
-It's old, awesome, and ridiculously fast. Well, this database library is based on old, awesome tech (SQLite), and it's ridiculously fast.
-
-(If I'm honest, though, it's mostly because it's a cool-ass plane. I don't even really care about planes, generally. Just that one.)
-
-### you know there are lots of other things called that
-
-Of course [there are](https://en.wikipedia.org/wiki/Ironbird). Who cares?
-
-This is a database engine that'll be used by, at most, a handful of nerds. It doesn't matter what it's called.
-
-I like unique names (rather than generic or descriptive names, like `Model` or `SwiftSQLite`) because they're easier to search for and harder to confuse with other types. So I wanted something memorable. I suppose I could've called it something like `ButtDB` — memorable! — but as I use it over the coming years, I wanted to type something cooler after all of my `struct` definitions.
-
-### why don't you support [SQLite feature]
-
-Ironbird is designed to make it very fast and easy to write apps that have the most common, straightforward database needs.
-
-Custom SQL is supported in many ways, but more advanced SQLite behavior like triggers, views, windows, foreign-key constraints, cascading writes, partial or expression indexes, virtual columns, etc. are not directly supported by Ironbird and may cause undefined behavior if used.
-
-By not supporting esoteric or specialized features that apps typically don't need, Ironbird is able to offer a cleaner API and more useful functionality for common cases.
-
-### why didn't you just use [other SQLite library]
-
-I like to write my own libraries.
-
-My libraries can perfectly match my needs and the way I expect them to work. And if my needs or expectations change, I can change the libraries.
-
-I also learn a great deal when writing them, exercising and improving my skills to benefit the rest of my work.
-
-And when I write the libraries, I understand how everything works as I'm using them, therefore creating fewer bugs and writing more efficient software.
-
-### you know [other SQLite library] is faster
-
-I know. Ironic, considering that I named this one after the fastest plane.
-
-Ironbird is optimized for speed of __development__. It's pretty fast in execution, too, but clarity, ease of use, reduced repetition, and simple tooling are higher priorities.
-
-Ironbird also offers automatic caching and fine-grained change reporting. This helps apps avoid many unnecessary queries, reloads, and UI refreshes, which can result in faster overall app performance.
-
-Other Swift SQLite libraries can be faster at raw database performance by omitting much of Ironbird's reflection, abstraction, and key-path usage. Some use code-generation methods, which can execute very efficiently but complicate development more than I'd like. Others take less-abstracted approaches that enable more custom behavior but make usage more complicated.
-
-I've chosen different trade-offs to better fit my needs. I've never written an app that was too slow to read its database, but I've frequently struggled with maintenance of large, complex codebases.
-
-Ironbird's goal is to achieve my ideal balance of ease-of-use and bug-avoidance, even though it's therefore not the fastest SQLite library in execution.
-
-Phones keep getting faster, but a bug is a bug forever.
+### Birds aren't iron???
+I wanted a name not unrelated to [the base library's](https://github.com/marcoarment/Blackbird) name, but distinct from it. Since many of my changes are about making the library more testable and predictable, I picked something solid-sounding, and what's [more solid](https://en.wikipedia.org/wiki/Diamond) [than iron](https://en.wikipedia.org/wiki/Steel)?
