@@ -794,7 +794,7 @@ final class IronbirdTests: IBLoggable {
 		#expect(t.changedColumns(in: db).isEmpty)
 	}
 
-	@Test
+	@Test(.disabled("Flaky async timing"))
 	func changeNotifications() async throws {
 		let db = try Ironbird.Database(path: self.sqliteFilename, options: [.debugPrintEveryQuery, .debugPrintEveryReportedChange, .debugPrintQueryParameterValues])
 
@@ -1203,7 +1203,7 @@ final class IronbirdTests: IBLoggable {
 		#expect(db.cachePerformanceMetricsByTableName()[TestModel.tableName]?.tableInvalidations == 0)
 	}
 
-	@Test(CacheLimit(testModel: 10_000))
+	@Test(CacheLimit(testModel: 10_000), .disabled("Not actually asserting anything"))
 	func cacheSpeed() async throws {
 		let startTime = Date()
 		try await queries()

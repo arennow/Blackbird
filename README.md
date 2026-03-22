@@ -16,7 +16,7 @@ Philosophy:
 Ironbird is fork of Marco Arment's excellent [Blackbird](https://github.com/marcoarment/Blackbird) library. This project differs from Marco's in a few ways:
 
 - It supports explicit migrations in addition to implicit migrations **(coming soon)**
-- Models can optionally use the typessafe `IronbirdUUID` macro **(coming soon)**
+- Models can optionally use the typesafe `IronbirdUUID` macro **(coming soon)**
 - It's in the Swift 6 language mode with full modern Swift Concurrency
 - I removed the SwiftUI-specific featureset (see the FAQ entry)
 
