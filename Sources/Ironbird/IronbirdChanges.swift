@@ -36,14 +36,14 @@ import Foundation
 import Loggable
 import Synchronization
 
-public extension Blackbird {
-	/// A change to a table in a Blackbird database, as emitted by a ``ChangeSequence``.
+public extension Ironbird {
+	/// A change to a table in a Ironbird database, as emitted by a ``ChangeSequence``.
 	///
-	/// For `BlackbirdModel` tables, ``BlackbirdModel/changeSequence(in:)`` provides a typed ``ModelChange`` instead.
+	/// For `IronbirdModel` tables, ``IronbirdModel/changeSequence(in:)`` provides a typed ``ModelChange`` instead.
 	struct Change: Sendable {
 		let table: String
 		let primaryKeys: PrimaryKeyValues?
-		let columnNames: Blackbird.ColumnNames?
+		let columnNames: Ironbird.ColumnNames?
 
 		/// Determine if a specific primary-key value may have changed.
 		/// - Parameter key: The single-column primary-key value in question.
@@ -52,7 +52,7 @@ public extension Blackbird {
 		/// For tables with multi-column primary keys, use ``hasMulticolumnPrimaryKeyChanged(_:)``.
 		public func hasPrimaryKeyChanged(_ key: Any) -> Bool {
 			guard let primaryKeys else { return true }
-			return primaryKeys.contains([try! Blackbird.Value.fromAny(key)])
+			return primaryKeys.contains([try! Ironbird.Value.fromAny(key)])
 		}
 
 		/// Determine if a specific primary-key value may have changed in a table with a multi-column primary key.
@@ -62,7 +62,7 @@ public extension Blackbird {
 		/// For tables with single-column primary keys, use ``hasPrimaryKeyChanged(_:)``.
 		public func hasMulticolumnPrimaryKeyChanged(_ key: [Any]) -> Bool {
 			guard let primaryKeys else { return true }
-			return primaryKeys.contains(key.map { try! Blackbird.Value.fromAny($0) })
+			return primaryKeys.contains(key.map { try! Ironbird.Value.fromAny($0) })
 		}
 
 		/// Determine if a specific column may have changed.
@@ -74,16 +74,16 @@ public extension Blackbird {
 		}
 	}
 
-	/// An `AsyncSequence` that emits when data in a Blackbird table has changed.
+	/// An `AsyncSequence` that emits when data in a Ironbird table has changed.
 	///
-	/// The ``Blackbird/Change`` passed indicates which rows and columns in the table have changed.
+	/// The ``Ironbird/Change`` passed indicates which rows and columns in the table have changed.
 	typealias ChangeSequence = AsyncPassthroughSubject<Change>
 
-	/// A change to a table in a Blackbird database, as emitted by a ``ChangeSequence``.
-	struct ModelChange<T: BlackbirdModel>: Sendable {
+	/// A change to a table in a Ironbird database, as emitted by a ``ChangeSequence``.
+	struct ModelChange<T: IronbirdModel>: Sendable {
 		let type: T.Type
 		let primaryKeys: PrimaryKeyValues?
-		let columnNames: Blackbird.ColumnNames?
+		let columnNames: Ironbird.ColumnNames?
 
 		/// Determine if a specific primary-key value may have changed.
 		/// - Parameter key: The single-column primary-key value in question.
@@ -92,7 +92,7 @@ public extension Blackbird {
 		/// For tables with multi-column primary keys, use ``hasMulticolumnPrimaryKeyChanged(_:)``.
 		public func hasPrimaryKeyChanged(_ key: Any) -> Bool {
 			guard let primaryKeys else { return true }
-			return primaryKeys.contains([try! Blackbird.Value.fromAny(key)])
+			return primaryKeys.contains([try! Ironbird.Value.fromAny(key)])
 		}
 
 		/// Determine if a specific primary-key value may have changed in a table with a multi-column primary key.
@@ -102,7 +102,7 @@ public extension Blackbird {
 		/// For tables with single-column primary keys, use ``hasPrimaryKeyChanged(_:)``.
 		public func hasMulticolumnPrimaryKeyChanged(_ key: [Any]) -> Bool {
 			guard let primaryKeys else { return true }
-			return primaryKeys.contains(key.map { try! Blackbird.Value.fromAny($0) })
+			return primaryKeys.contains(key.map { try! Ironbird.Value.fromAny($0) })
 		}
 
 		/// Determine if a specific column name may have changed.
@@ -116,7 +116,7 @@ public extension Blackbird {
 		/// Determine if a specific column key-path may have changed.
 		/// - Parameter keyPath: The column key-path using its `$`-prefixed wrapper, e.g. `\.$title`.
 		/// - Returns: Whether this column may have changed in any rows. Note that changes may be over-reported.
-		public func hasColumnChanged(_ keyPath: T.BlackbirdColumnKeyPath) -> Bool {
+		public func hasColumnChanged(_ keyPath: T.IronbirdColumnKeyPath) -> Bool {
 			guard let columnNames else { return true }
 			return columnNames.contains(T.table.keyPathToColumnName(keyPath: keyPath))
 		}
@@ -134,12 +134,12 @@ public extension Blackbird {
 		}
 	}
 
-	/// An AsyncSequence that emits when data in a BlackbirdModel table has changed.
+	/// An AsyncSequence that emits when data in a IronbirdModel table has changed.
 	///
-	/// The ``Blackbird/ModelChange`` passed indicates which rows and columns in the table have changed.
-	typealias ModelChangeSequence<T: BlackbirdModel> = AsyncPassthroughSubject<ModelChange<T>>
+	/// The ``Ironbird/ModelChange`` passed indicates which rows and columns in the table have changed.
+	typealias ModelChangeSequence<T: IronbirdModel> = AsyncPassthroughSubject<ModelChange<T>>
 
-	internal static func isRelevantPrimaryKeyChange(watchedPrimaryKeys: Blackbird.PrimaryKeyValues?, changedPrimaryKeys: Blackbird.PrimaryKeyValues?) -> Bool {
+	internal static func isRelevantPrimaryKeyChange(watchedPrimaryKeys: Ironbird.PrimaryKeyValues?, changedPrimaryKeys: Ironbird.PrimaryKeyValues?) -> Bool {
 		guard let watchedPrimaryKeys else {
 			// Not watching any particular keys -- always update for any table change
 			return true
@@ -161,21 +161,21 @@ public extension Blackbird {
 
 // MARK: - Change sequence
 
-extension Blackbird.Database {
-	/// The ``Blackbird/ChangeSequence`` for the specified table.
+extension Ironbird.Database {
+	/// The ``Ironbird/ChangeSequence`` for the specified table.
 	/// - Parameter tableName: The table name.
-	/// - Returns: A ``Blackbird/ChangeSequence`` that emits ``Blackbird/Change`` objects for each change in the specified table.
+	/// - Returns: A ``Ironbird/ChangeSequence`` that emits ``Ironbird/Change`` objects for each change in the specified table.
 	///
-	/// For `BlackbirdModel` tables, ``BlackbirdModel/changeSequence(in:)`` provides a typed ``Blackbird/ModelChange`` instead.
+	/// For `IronbirdModel` tables, ``IronbirdModel/changeSequence(in:)`` provides a typed ``Ironbird/ModelChange`` instead.
 	///
 	/// > - Changes may be over-reported.
-	public func changeSequence(for tableName: String) -> Blackbird.ChangeSequence { changeReporter.changeSequence(for: tableName) }
+	public func changeSequence(for tableName: String) -> Ironbird.ChangeSequence { changeReporter.changeSequence(for: tableName) }
 
 	final class ChangeReporter: Sendable, IBLoggable {
 		struct AccumulatedChanges {
-			var primaryKeys: Blackbird.PrimaryKeyValues? = Blackbird.PrimaryKeyValues()
-			var columnNames: Blackbird.ColumnNames? = Blackbird.ColumnNames()
-			static func entireTableChange(columnsIfKnown: Blackbird.ColumnNames? = nil) -> Self {
+			var primaryKeys: Ironbird.PrimaryKeyValues? = Ironbird.PrimaryKeyValues()
+			var columnNames: Ironbird.ColumnNames? = Ironbird.ColumnNames()
+			static func entireTableChange(columnsIfKnown: Ironbird.ColumnNames? = nil) -> Self {
 				Self(primaryKeys: nil, columnNames: columnsIfKnown)
 			}
 		}
@@ -186,12 +186,12 @@ extension Blackbird.Database {
 			var bufferRowIDsForIgnoredTable = false
 			var bufferedRowIDsForIgnoredTable = Set<Int64>()
 			var accumulatedChangesByTable: [String: AccumulatedChanges] = [:]
-			var tableChangeSubjects: [String: AsyncPassthroughSubject<Blackbird.Change>] = [:]
+			var tableChangeSubjects: [String: AsyncPassthroughSubject<Ironbird.Change>] = [:]
 		}
 
 		private let state = Mutex(State())
 		private let debugPrintEveryReportedChange: Bool
-		private let cache: Blackbird.Database.Cache
+		private let cache: Ironbird.Database.Cache
 		private let _numChangesReportedByUpdateHook = Atomic<UInt64>(0)
 
 		var numChangesReportedByUpdateHook: UInt64 {
@@ -202,15 +202,15 @@ extension Blackbird.Database {
 			self._numChangesReportedByUpdateHook.wrappingAdd(1, ordering: .relaxed)
 		}
 
-		init(options: Options, cache: Blackbird.Database.Cache) {
+		init(options: Options, cache: Ironbird.Database.Cache) {
 			self.debugPrintEveryReportedChange = options.contains(.debugPrintEveryReportedChange)
 			self.cache = cache
 		}
 
-		func changeSequence(for tableName: String) -> Blackbird.ChangeSequence {
+		func changeSequence(for tableName: String) -> Ironbird.ChangeSequence {
 			self.state.withLock { s in
 				if let existing = s.tableChangeSubjects[tableName] { return existing }
-				let new = AsyncPassthroughSubject<Blackbird.Change>()
+				let new = AsyncPassthroughSubject<Ironbird.Change>()
 				s.tableChangeSubjects[tableName] = new
 				return new
 			}
@@ -260,7 +260,7 @@ extension Blackbird.Database {
 			if needsFlush { self.flush() }
 		}
 
-		func reportChange(tableName: String, primaryKeys: [[Blackbird.Value]]? = nil, rowID: Int64? = nil, changedColumns: Blackbird.ColumnNames?) {
+		func reportChange(tableName: String, primaryKeys: [[Ironbird.Value]]? = nil, rowID: Int64? = nil, changedColumns: Ironbird.ColumnNames?) {
 			let needsFlush = self.state.withLock { s in
 				if tableName == s.ignoreWritesToTableName {
 					if let rowID, s.bufferRowIDsForIgnoredTable { _ = s.bufferedRowIDsForIgnoredTable.insert(rowID) }
@@ -303,10 +303,10 @@ extension Blackbird.Database {
 					if self.debugPrintEveryReportedChange {
 						Self.logger.debug("Changed \(tableName) (\(keys.count) keys, fields: \(accumulatedChanges.columnNames?.joined(separator: ",") ?? "(all/unknown)"))")
 					}
-					if let sequence = subjects[tableName] { sequence.send(Blackbird.Change(table: tableName, primaryKeys: keys, columnNames: accumulatedChanges.columnNames)) }
+					if let sequence = subjects[tableName] { sequence.send(Ironbird.Change(table: tableName, primaryKeys: keys, columnNames: accumulatedChanges.columnNames)) }
 				} else {
 					if self.debugPrintEveryReportedChange { Self.logger.debug("Changed \(tableName) (unknown keys, fields: \(accumulatedChanges.columnNames?.joined(separator: ",") ?? "(all/unknown)"))") }
-					if let sequence = subjects[tableName] { sequence.send(Blackbird.Change(table: tableName, primaryKeys: nil, columnNames: accumulatedChanges.columnNames)) }
+					if let sequence = subjects[tableName] { sequence.send(Ironbird.Change(table: tableName, primaryKeys: nil, columnNames: accumulatedChanges.columnNames)) }
 				}
 			}
 		}

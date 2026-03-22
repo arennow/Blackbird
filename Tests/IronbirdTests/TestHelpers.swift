@@ -1,4 +1,4 @@
-@testable import Blackbird
+@testable import Ironbird
 import Testing
 
 struct CacheLimit: TestTrait, TestScoping {

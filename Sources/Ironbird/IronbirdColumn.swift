@@ -35,26 +35,26 @@ import Foundation
 import Synchronization
 
 protocol ColumnWrapper: WrappedType {
-	associatedtype ValueType: BlackbirdColumnWrappable
+	associatedtype ValueType: IronbirdColumnWrappable
 	var value: ValueType { get }
-	var valueType: any BlackbirdColumnWrappable.Type { get }
-	func hasChanged(in database: Blackbird.Database) -> Bool
-	func clearHasChanged(in database: Blackbird.Database)
+	var valueType: any IronbirdColumnWrappable.Type { get }
+	func hasChanged(in database: Ironbird.Database) -> Bool
+	func clearHasChanged(in database: Ironbird.Database)
 	var internalNameInSchemaGenerator: Box<Mutex<String?>> { get }
 }
 
-/// Property wrapper for column variables in ``BlackbirdModel`` `struct` definitions.
-@propertyWrapper public struct BlackbirdColumn<T: BlackbirdColumnWrappable>: ColumnWrapper, WrappedType, Equatable, Sendable, Codable {
-	var valueType: any BlackbirdColumnWrappable.Type { T.self }
+/// Property wrapper for column variables in ``IronbirdModel`` `struct` definitions.
+@propertyWrapper public struct IronbirdColumn<T: IronbirdColumnWrappable>: ColumnWrapper, WrappedType, Equatable, Sendable, Codable {
+	var valueType: any IronbirdColumnWrappable.Type { T.self }
 
 	public static func == (lhs: Self, rhs: Self) -> Bool { type(of: lhs) == type(of: rhs) && lhs.value == rhs.value }
 
 	private var _value: T
 	struct ColumnState<U> {
 		var hasChanged: Bool
-		weak var lastUsedDatabase: Blackbird.Database?
+		weak var lastUsedDatabase: Ironbird.Database?
 
-		init(hasChanged: Bool, lastUsedDatabase: Blackbird.Database? = nil) {
+		init(hasChanged: Bool, lastUsedDatabase: Ironbird.Database? = nil) {
 			self.hasChanged = hasChanged
 			self.lastUsedDatabase = lastUsedDatabase
 		}
@@ -68,7 +68,7 @@ protocol ColumnWrapper: WrappedType {
 		set { self.wrappedValue = newValue }
 	}
 
-	public var projectedValue: BlackbirdColumn<T> { self }
+	public var projectedValue: IronbirdColumn<T> { self }
 	static func schemaGeneratorWrappedType() -> Any.Type { T.self }
 
 	public var wrappedValue: T {
@@ -83,14 +83,14 @@ protocol ColumnWrapper: WrappedType {
 	}
 
 	/// Whether this value has changed since last being saved or read. This errs on the side of over-reporting changes, and may return `true` if the value has not actually changed.
-	public func hasChanged(in database: Blackbird.Database) -> Bool {
+	public func hasChanged(in database: Ironbird.Database) -> Bool {
 		self.state.value.withLock { state in
 			if state.lastUsedDatabase != database { return true }
 			return state.hasChanged
 		}
 	}
 
-	func clearHasChanged(in database: Blackbird.Database) {
+	func clearHasChanged(in database: Ironbird.Database) {
 		self.state.value.withLock { state in
 			state.lastUsedDatabase = database
 			state.hasChanged = false
@@ -106,7 +106,7 @@ protocol ColumnWrapper: WrappedType {
 		let container = try decoder.singleValueContainer()
 		let value = try container.decode(T.self)
 		self._value = value
-		if let sqliteDecoder = decoder as? BlackbirdSQLiteDecoder {
+		if let sqliteDecoder = decoder as? IronbirdSQLiteDecoder {
 			self.state = Box(Mutex(ColumnState(hasChanged: false, lastUsedDatabase: sqliteDecoder.database)))
 		} else {
 			self.state = Box(Mutex(ColumnState(hasChanged: true, lastUsedDatabase: nil)))

@@ -36,7 +36,7 @@
 
 import Foundation
 
-class BlackbirdSQLiteDecoder: Decoder {
+class IronbirdSQLiteDecoder: Decoder {
 	enum Error: Swift.Error {
 		case invalidValue(String, value: String)
 		case missingValue(String)
@@ -45,52 +45,52 @@ class BlackbirdSQLiteDecoder: Decoder {
 	var codingPath: [CodingKey] = []
 	var userInfo: [CodingUserInfoKey: Any] = [:]
 
-	let database: Blackbird.Database
-	let row: Blackbird.Row
-	init(database: Blackbird.Database, row: Blackbird.Row, codingPath: [CodingKey] = []) {
+	let database: Ironbird.Database
+	let row: Ironbird.Row
+	init(database: Ironbird.Database, row: Ironbird.Row, codingPath: [CodingKey] = []) {
 		self.database = database
 		self.row = row
 		self.codingPath = codingPath
 	}
 
 	func container<Key: CodingKey>(keyedBy type: Key.Type) throws -> KeyedDecodingContainer<Key> {
-		if let iterableKey = Key.self as? any BlackbirdCodingKey.Type {
+		if let iterableKey = Key.self as? any IronbirdCodingKey.Type {
 			// Custom CodingKeys are in use, so remap the row to use the expected keys instead of raw column names
-			var newRow = Blackbird.Row()
+			var newRow = Ironbird.Row()
 			for (columnName, customFieldName) in iterableKey.allLabeledCases {
 				if let rowValue = row[columnName] {
 					newRow[customFieldName] = rowValue
 				}
 			}
-			return KeyedDecodingContainer(BlackbirdSQLiteKeyedDecodingContainer<Key>(codingPath: self.codingPath, database: self.database, row: newRow))
+			return KeyedDecodingContainer(IronbirdSQLiteKeyedDecodingContainer<Key>(codingPath: self.codingPath, database: self.database, row: newRow))
 		}
 
 		// Use default names without custom CodingKeys
-		return KeyedDecodingContainer(BlackbirdSQLiteKeyedDecodingContainer<Key>(codingPath: self.codingPath, database: self.database, row: self.row))
+		return KeyedDecodingContainer(IronbirdSQLiteKeyedDecodingContainer<Key>(codingPath: self.codingPath, database: self.database, row: self.row))
 	}
 
 	func unkeyedContainer() throws -> UnkeyedDecodingContainer { fatalError("unsupported") }
-	func singleValueContainer() throws -> SingleValueDecodingContainer { BlackbirdSQLiteSingleValueDecodingContainer(codingPath: self.codingPath, database: self.database, row: self.row) }
+	func singleValueContainer() throws -> SingleValueDecodingContainer { IronbirdSQLiteSingleValueDecodingContainer(codingPath: self.codingPath, database: self.database, row: self.row) }
 }
 
-fileprivate struct BlackbirdSQLiteSingleValueDecodingContainer: SingleValueDecodingContainer {
+fileprivate struct IronbirdSQLiteSingleValueDecodingContainer: SingleValueDecodingContainer {
 	enum Error: Swift.Error {
 		case invalidEnumValue(typeDescription: String, value: Sendable)
 	}
 
 	var codingPath: [CodingKey] = []
-	let database: Blackbird.Database
-	var row: Blackbird.Row
+	let database: Ironbird.Database
+	var row: Ironbird.Row
 
-	init(codingPath: [CodingKey], database: Blackbird.Database, row: Blackbird.Row) {
+	init(codingPath: [CodingKey], database: Ironbird.Database, row: Ironbird.Row) {
 		self.codingPath = codingPath
 		self.database = database
 		self.row = row
 	}
 
-	private func value() throws -> Blackbird.Value {
+	private func value() throws -> Ironbird.Value {
 		guard let key = codingPath.first?.stringValue, let v = row[key] else {
-			throw BlackbirdSQLiteDecoder.Error.missingValue(self.codingPath.first?.stringValue ?? "(unknown key)")
+			throw IronbirdSQLiteDecoder.Error.missingValue(self.codingPath.first?.stringValue ?? "(unknown key)")
 		}
 		return v
 	}
@@ -117,15 +117,15 @@ fileprivate struct BlackbirdSQLiteSingleValueDecodingContainer: SingleValueDecod
 		if T.self == URL.self, let urlStr = value.stringValue, let url = URL(string: urlStr) { return url as! T }
 		if T.self == Date.self { return Date(timeIntervalSince1970: value.doubleValue ?? 0) as! T }
 
-		if let eT = T.self as? any BlackbirdIntegerOptionalEnum.Type, value.int64Value == nil {
+		if let eT = T.self as? any IronbirdIntegerOptionalEnum.Type, value.int64Value == nil {
 			return (try self.decodeNilRepresentable(eT) as? T)!
 		}
 
-		if let eT = T.self as? any BlackbirdStringOptionalEnum.Type, value.stringValue == nil {
+		if let eT = T.self as? any IronbirdStringOptionalEnum.Type, value.stringValue == nil {
 			return (try self.decodeNilRepresentable(eT) as? T)!
 		}
 
-		if let eT = T.self as? any BlackbirdIntegerEnum.Type {
+		if let eT = T.self as? any IronbirdIntegerEnum.Type {
 			let rawValue = value.int64Value ?? 0
 			guard let integerEnum = try decodeRepresentable(eT, unifiedRawValue: rawValue), let converted = integerEnum as? T else {
 				throw Error.invalidEnumValue(typeDescription: String(describing: eT), value: rawValue)
@@ -133,7 +133,7 @@ fileprivate struct BlackbirdSQLiteSingleValueDecodingContainer: SingleValueDecod
 			return converted
 		}
 
-		if let eT = T.self as? any BlackbirdStringEnum.Type {
+		if let eT = T.self as? any IronbirdStringEnum.Type {
 			let rawValue = value.stringValue ?? ""
 			guard let stringEnum = try decodeRepresentable(eT, unifiedRawValue: rawValue), let converted = stringEnum as? T else {
 				throw Error.invalidEnumValue(typeDescription: String(describing: eT), value: rawValue)
@@ -150,37 +150,37 @@ fileprivate struct BlackbirdSQLiteSingleValueDecodingContainer: SingleValueDecod
 			}
 		}
 
-		if let eT = T.self as? any BlackbirdStorableAsData.Type, let data = value.dataValue {
+		if let eT = T.self as? any IronbirdStorableAsData.Type, let data = value.dataValue {
 			return try JSONDecoder().decode(eT, from: data) as! T
 		}
 
-		return try T(from: BlackbirdSQLiteDecoder(database: self.database, row: self.row, codingPath: self.codingPath))
+		return try T(from: IronbirdSQLiteDecoder(database: self.database, row: self.row, codingPath: self.codingPath))
 	}
 
-	func decodeRepresentable<T: BlackbirdIntegerEnum>(_ type: T.Type, unifiedRawValue: Int64) throws -> T? {
+	func decodeRepresentable<T: IronbirdIntegerEnum>(_ type: T.Type, unifiedRawValue: Int64) throws -> T? {
 		T(rawValue: T.RawValue.from(unifiedRepresentation: unifiedRawValue))
 	}
 
-	func decodeRepresentable<T: BlackbirdStringEnum>(_ type: T.Type, unifiedRawValue: String) throws -> T? {
+	func decodeRepresentable<T: IronbirdStringEnum>(_ type: T.Type, unifiedRawValue: String) throws -> T? {
 		T(rawValue: T.RawValue.from(unifiedRepresentation: unifiedRawValue))
 	}
 
-	func decodeNilRepresentable<T: BlackbirdIntegerOptionalEnum>(_ type: T.Type) throws -> T {
+	func decodeNilRepresentable<T: IronbirdIntegerOptionalEnum>(_ type: T.Type) throws -> T {
 		T.nilInstance()
 	}
 
-	func decodeNilRepresentable<T: BlackbirdStringOptionalEnum>(_ type: T.Type) throws -> T {
+	func decodeNilRepresentable<T: IronbirdStringOptionalEnum>(_ type: T.Type) throws -> T {
 		T.nilInstance()
 	}
 }
 
-fileprivate class BlackbirdSQLiteKeyedDecodingContainer<K: CodingKey>: KeyedDecodingContainerProtocol {
+fileprivate class IronbirdSQLiteKeyedDecodingContainer<K: CodingKey>: KeyedDecodingContainerProtocol {
 	typealias Key = K
 	let codingPath: [CodingKey]
-	let database: Blackbird.Database
-	var row: Blackbird.Row
+	let database: Ironbird.Database
+	var row: Ironbird.Row
 
-	init(codingPath: [CodingKey] = [], database: Blackbird.Database, row: Blackbird.Row) {
+	init(codingPath: [CodingKey] = [], database: Ironbird.Database, row: Ironbird.Row) {
 		self.database = database
 		self.row = row
 		self.codingPath = codingPath
@@ -217,7 +217,7 @@ fileprivate class BlackbirdSQLiteKeyedDecodingContainer<K: CodingKey>: KeyedDeco
 
 	func decode(_: URL.Type, forKey key: K) throws -> URL {
 		let string = try decode(String.self, forKey: key)
-		guard let url = URL(string: string) else { throw BlackbirdSQLiteDecoder.Error.invalidValue(key.stringValue, value: string) }
+		guard let url = URL(string: string) else { throw IronbirdSQLiteDecoder.Error.invalidValue(key.stringValue, value: string) }
 		return url
 	}
 
@@ -228,7 +228,7 @@ fileprivate class BlackbirdSQLiteKeyedDecodingContainer<K: CodingKey>: KeyedDeco
 
 		var newPath = self.codingPath
 		newPath.append(key)
-		return try T(from: BlackbirdSQLiteDecoder(database: self.database, row: self.row, codingPath: newPath))
+		return try T(from: IronbirdSQLiteDecoder(database: self.database, row: self.row, codingPath: newPath))
 	}
 
 	func nestedContainer<NestedKey: CodingKey>(keyedBy type: NestedKey.Type, forKey key: K) throws -> KeyedDecodingContainer<NestedKey> { fatalError("unsupported") }

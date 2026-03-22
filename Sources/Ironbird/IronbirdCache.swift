@@ -35,7 +35,7 @@ import Foundation
 import Loggable
 import Synchronization
 
-public extension Blackbird.Database {
+public extension Ironbird.Database {
 	struct CachePerformanceMetrics: Sendable {
 		public let hits: Int
 		public let misses: Int
@@ -47,7 +47,7 @@ public extension Blackbird.Database {
 		public let lowMemoryFlushes: Int
 	}
 
-	private static let cacheLogger = Logger.with(subsystem: Blackbird.loggingSubsystem, category: "DatabaseCache")
+	private static let cacheLogger = Logger.with(subsystem: Ironbird.loggingSubsystem, category: "DatabaseCache")
 
 	func cachePerformanceMetricsByTableName() -> [String: CachePerformanceMetrics] { cache.performanceMetrics() }
 	func resetCachePerformanceMetrics(tableName: String) { cache.resetPerformanceMetrics(tableName: tableName) }
@@ -109,8 +109,8 @@ public extension Blackbird.Database {
 
 		private final class TableCache: Sendable {
 			private struct State {
-				var modelsByPrimaryKey: [Blackbird.Value: CacheEntry<any BlackbirdModel>] = [:]
-				var cachedQueries: [[Blackbird.Value]: CacheEntry<Sendable>] = [:]
+				var modelsByPrimaryKey: [Ironbird.Value: CacheEntry<any IronbirdModel>] = [:]
+				var cachedQueries: [[Ironbird.Value]: CacheEntry<Sendable>] = [:]
 				var hits: Int = 0
 				var misses: Int = 0
 				var writes: Int = 0
@@ -123,7 +123,7 @@ public extension Blackbird.Database {
 
 			private let state = Mutex(State())
 
-			func get(primaryKey: Blackbird.Value) -> (any BlackbirdModel)? {
+			func get(primaryKey: Ironbird.Value) -> (any IronbirdModel)? {
 				self.state.withLock { s in
 					if let hit = s.modelsByPrimaryKey[primaryKey] {
 						hit.lastAccessed = mach_absolute_time()
@@ -136,10 +136,10 @@ public extension Blackbird.Database {
 				}
 			}
 
-			func get(primaryKeys: [Blackbird.Value]) -> (hits: [any BlackbirdModel], missedKeys: [Blackbird.Value]) {
+			func get(primaryKeys: [Ironbird.Value]) -> (hits: [any IronbirdModel], missedKeys: [Ironbird.Value]) {
 				self.state.withLock { s in
-					var hitResults: [any BlackbirdModel] = []
-					var missedKeys: [Blackbird.Value] = []
+					var hitResults: [any IronbirdModel] = []
+					var missedKeys: [Ironbird.Value] = []
 					for key in primaryKeys {
 						if let hit = s.modelsByPrimaryKey[key] { hitResults.append(hit.value()) } else { missedKeys.append(key) }
 					}
@@ -149,7 +149,7 @@ public extension Blackbird.Database {
 				}
 			}
 
-			func getQuery(cacheKey: [Blackbird.Value]) -> CachedQueryResult {
+			func getQuery(cacheKey: [Ironbird.Value]) -> CachedQueryResult {
 				self.state.withLock { s in
 					if let hit = s.cachedQueries[cacheKey] {
 						s.hits += 1
@@ -161,7 +161,7 @@ public extension Blackbird.Database {
 				}
 			}
 
-			func add(primaryKey: Blackbird.Value, instance: any BlackbirdModel, pruneToLimit: Int? = nil) {
+			func add(primaryKey: Ironbird.Value, instance: any IronbirdModel, pruneToLimit: Int? = nil) {
 				self.state.withLock { s in
 					s.modelsByPrimaryKey[primaryKey] = CacheEntry(instance)
 					s.writes += 1
@@ -169,7 +169,7 @@ public extension Blackbird.Database {
 				}
 			}
 
-			func addQuery(cacheKey: [Blackbird.Value], result: Sendable?, pruneToLimit: Int? = nil) {
+			func addQuery(cacheKey: [Ironbird.Value], result: Sendable?, pruneToLimit: Int? = nil) {
 				self.state.withLock { s in
 					s.cachedQueries[cacheKey] = CacheEntry(result)
 					s.writes += 1
@@ -177,7 +177,7 @@ public extension Blackbird.Database {
 				}
 			}
 
-			func delete(primaryKey: Blackbird.Value) {
+			func delete(primaryKey: Ironbird.Value) {
 				self.state.withLock { s in
 					_ = s.modelsByPrimaryKey.removeValue(forKey: primaryKey)
 					s.writes += 1
@@ -214,7 +214,7 @@ public extension Blackbird.Database {
 				s.evictions += evictionCount
 			}
 
-			func invalidate(primaryKeyValue: Blackbird.Value? = nil) {
+			func invalidate(primaryKeyValue: Ironbird.Value? = nil) {
 				self.state.withLock { s in
 					if let primaryKeyValue {
 						if s.modelsByPrimaryKey.removeValue(forKey: primaryKeyValue) != nil {
@@ -264,7 +264,7 @@ public extension Blackbird.Database {
 
 		private let entriesByTableName = Mutex<[String: TableCache]>([:])
 
-		func invalidate(tableName: String? = nil, primaryKeyValue: Blackbird.Value? = nil) {
+		func invalidate(tableName: String? = nil, primaryKeyValue: Ironbird.Value? = nil) {
 			self.entriesByTableName.withLock {
 				if let tableName {
 					$0[tableName]?.invalidate(primaryKeyValue: primaryKeyValue)
@@ -276,7 +276,7 @@ public extension Blackbird.Database {
 			}
 		}
 
-		func readModel(tableName: String, primaryKey: Blackbird.Value) -> (any BlackbirdModel)? {
+		func readModel(tableName: String, primaryKey: Ironbird.Value) -> (any IronbirdModel)? {
 			self.entriesByTableName.withLock {
 				let tableCache: TableCache
 				if let existingCache = $0[tableName] { tableCache = existingCache }
@@ -289,7 +289,7 @@ public extension Blackbird.Database {
 			}
 		}
 
-		func readModels(tableName: String, primaryKeys: [Blackbird.Value]) -> (hits: [any BlackbirdModel], missedKeys: [Blackbird.Value]) {
+		func readModels(tableName: String, primaryKeys: [Ironbird.Value]) -> (hits: [any IronbirdModel], missedKeys: [Ironbird.Value]) {
 			self.entriesByTableName.withLock {
 				let tableCache: TableCache
 				if let existingCache = $0[tableName] { tableCache = existingCache }
@@ -302,7 +302,7 @@ public extension Blackbird.Database {
 			}
 		}
 
-		func writeModel(tableName: String, primaryKey: Blackbird.Value, instance: any BlackbirdModel, entryLimit: Int) {
+		func writeModel(tableName: String, primaryKey: Ironbird.Value, instance: any IronbirdModel, entryLimit: Int) {
 			self.entriesByTableName.withLock {
 				let tableCache: TableCache
 				if let existingCache = $0[tableName] { tableCache = existingCache }
@@ -315,7 +315,7 @@ public extension Blackbird.Database {
 			}
 		}
 
-		func deleteModel(tableName: String, primaryKey: Blackbird.Value) {
+		func deleteModel(tableName: String, primaryKey: Ironbird.Value) {
 			self.entriesByTableName.withLock {
 				let tableCache: TableCache
 				if let existingCache = $0[tableName] { tableCache = existingCache }
@@ -328,7 +328,7 @@ public extension Blackbird.Database {
 			}
 		}
 
-		func readQueryResult(tableName: String, cacheKey: [Blackbird.Value]) -> CachedQueryResult {
+		func readQueryResult(tableName: String, cacheKey: [Ironbird.Value]) -> CachedQueryResult {
 			self.entriesByTableName.withLock {
 				let tableCache: TableCache
 				if let existingCache = $0[tableName] { tableCache = existingCache }
@@ -340,7 +340,7 @@ public extension Blackbird.Database {
 			}
 		}
 
-		func writeQueryResult(tableName: String, cacheKey: [Blackbird.Value], result: Sendable, entryLimit: Int) {
+		func writeQueryResult(tableName: String, cacheKey: [Ironbird.Value], result: Sendable, entryLimit: Int) {
 			self.entriesByTableName.withLock {
 				let tableCache: TableCache
 				if let existingCache = $0[tableName] { tableCache = existingCache }
@@ -365,26 +365,26 @@ public extension Blackbird.Database {
 	}
 }
 
-extension BlackbirdModel {
-	func _saveCachedInstance(for database: Blackbird.Database) {
+extension IronbirdModel {
+	func _saveCachedInstance(for database: Ironbird.Database) {
 		let cacheLimit = Self.cacheLimit
-		if cacheLimit > 0, let pkValues = try? self.primaryKeyValues(), pkValues.count == 1, let pk = try? Blackbird.Value.fromAny(pkValues.first!) {
+		if cacheLimit > 0, let pkValues = try? self.primaryKeyValues(), pkValues.count == 1, let pk = try? Ironbird.Value.fromAny(pkValues.first!) {
 			database.cache.writeModel(tableName: Self.tableName, primaryKey: pk, instance: self, entryLimit: cacheLimit)
 		}
 	}
 
-	func _deleteCachedInstance(for database: Blackbird.Database) {
-		if Self.cacheLimit > 0, let pkValues = try? self.primaryKeyValues(), pkValues.count == 1, let pk = try? Blackbird.Value.fromAny(pkValues.first!) {
+	func _deleteCachedInstance(for database: Ironbird.Database) {
+		if Self.cacheLimit > 0, let pkValues = try? self.primaryKeyValues(), pkValues.count == 1, let pk = try? Ironbird.Value.fromAny(pkValues.first!) {
 			database.cache.deleteModel(tableName: Self.tableName, primaryKey: pk)
 		}
 	}
 
-	static func _cachedInstance(for database: Blackbird.Database, primaryKeyValue: Blackbird.Value) -> Self? {
+	static func _cachedInstance(for database: Ironbird.Database, primaryKeyValue: Ironbird.Value) -> Self? {
 		guard Self.cacheLimit > 0 else { return nil }
 		return database.cache.readModel(tableName: Self.tableName, primaryKey: primaryKeyValue) as? Self
 	}
 
-	static func _cachedInstances(for database: Blackbird.Database, primaryKeyValues: [Blackbird.Value]) -> (hits: [Self], missedKeys: [Blackbird.Value]) {
+	static func _cachedInstances(for database: Ironbird.Database, primaryKeyValues: [Ironbird.Value]) -> (hits: [Self], missedKeys: [Ironbird.Value]) {
 		guard Self.cacheLimit > 0 else { return (hits: [], missedKeys: primaryKeyValues) }
 		let results = database.cache.readModels(tableName: Self.tableName, primaryKeys: primaryKeyValues)
 

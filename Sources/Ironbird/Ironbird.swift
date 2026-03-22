@@ -37,23 +37,23 @@ import SQLite3
 import Synchronization
 
 /// A small, fast, lightweight SQLite database wrapper and model layer.
-public enum Blackbird {
+public enum Ironbird {
 	/// A dictionary of argument values for a database query, keyed by column names.
-	public typealias Arguments = Dictionary<String, Blackbird.Value>
+	public typealias Arguments = Dictionary<String, Ironbird.Value>
 
 	/// A set of primary-key values, where each is an array of values (to support multi-column primary keys).
-	public typealias PrimaryKeyValues = Set<[Blackbird.Value]>
+	public typealias PrimaryKeyValues = Set<[Ironbird.Value]>
 
 	/// A set of column names.
 	public typealias ColumnNames = Set<String>
 
-	/// Basic info for a ``BlackbirdColumn`` as returned by ``BlackbirdModel/columnInfoFromKeyPaths(_:)``.
+	/// Basic info for a ``IronbirdColumn`` as returned by ``IronbirdModel/columnInfoFromKeyPaths(_:)``.
 	public struct ColumnInfo {
 		/// The column's name.
 		public let name: String
 
 		/// The column's type.
-		public let type: any BlackbirdColumnWrappable.Type
+		public let type: any IronbirdColumnWrappable.Type
 	}
 
 	public enum Error: Swift.Error {
@@ -63,7 +63,7 @@ public enum Blackbird {
 
 	/// A wrapper for SQLite's column data types.
 	public enum Value: Sendable, ExpressibleByStringLiteral, ExpressibleByFloatLiteral, ExpressibleByBooleanLiteral, ExpressibleByIntegerLiteral, Hashable, Comparable {
-		public static func < (lhs: Blackbird.Value, rhs: Blackbird.Value) -> Bool {
+		public static func < (lhs: Ironbird.Value, rhs: Ironbird.Value) -> Bool {
 			switch lhs {
 				case .null: return false
 				case .integer(let i): return i < rhs.int64Value ?? 0
@@ -102,12 +102,12 @@ public enum Blackbird {
 				case _ as NSNull: return .null
 				case let v as Value: return v
 				case let v as any StringProtocol: return .text(String(v))
-				case let v as any BlackbirdStorableAsInteger: return .integer(v.unifiedRepresentation())
-				case let v as any BlackbirdStorableAsDouble: return .double(v.unifiedRepresentation())
-				case let v as any BlackbirdStorableAsText: return .text(v.unifiedRepresentation())
-				case let v as any BlackbirdStorableAsData: return .data(v.unifiedRepresentation())
-				case let v as any BlackbirdIntegerEnum: return .integer(v.rawValue.unifiedRepresentation())
-				case let v as any BlackbirdStringEnum: return .text(v.rawValue.unifiedRepresentation())
+				case let v as any IronbirdStorableAsInteger: return .integer(v.unifiedRepresentation())
+				case let v as any IronbirdStorableAsDouble: return .double(v.unifiedRepresentation())
+				case let v as any IronbirdStorableAsText: return .text(v.unifiedRepresentation())
+				case let v as any IronbirdStorableAsData: return .data(v.unifiedRepresentation())
+				case let v as any IronbirdIntegerEnum: return .integer(v.rawValue.unifiedRepresentation())
+				case let v as any IronbirdStringEnum: return .text(v.rawValue.unifiedRepresentation())
 				default: throw Error.cannotConvertToValue
 			}
 		}
@@ -224,21 +224,21 @@ public enum Blackbird {
 
 		private static let copyValue = unsafeBitCast(-1, to: sqlite3_destructor_type.self) // a.k.a. SQLITE_TRANSIENT
 
-		func bind(database: isolated Blackbird.Database.Core, statement: OpaquePointer, index: Int32, for query: String) throws {
+		func bind(database: isolated Ironbird.Database.Core, statement: OpaquePointer, index: Int32, for query: String) throws {
 			var result: Int32
 			switch self {
 				case .null: result = sqlite3_bind_null(statement, index)
 				case .integer(let i): result = sqlite3_bind_int64(statement, index, i)
 				case .double(let d): result = sqlite3_bind_double(statement, index, d)
-				case .text(let s): result = sqlite3_bind_text(statement, index, s, -1, Blackbird.Value.copyValue)
-				case .data(let d): result = d.withUnsafeBytes { bytes in sqlite3_bind_blob(statement, index, bytes.baseAddress, Int32(bytes.count), Blackbird.Value.copyValue) }
+				case .text(let s): result = sqlite3_bind_text(statement, index, s, -1, Ironbird.Value.copyValue)
+				case .data(let d): result = d.withUnsafeBytes { bytes in sqlite3_bind_blob(statement, index, bytes.baseAddress, Int32(bytes.count), Ironbird.Value.copyValue) }
 			}
-			if result != SQLITE_OK { throw Blackbird.Database.Error.queryArgumentValueError(query: query, description: database.errorDesc(database.dbHandle)) }
+			if result != SQLITE_OK { throw Ironbird.Database.Error.queryArgumentValueError(query: query, description: database.errorDesc(database.dbHandle)) }
 		}
 
-		func bind(database: isolated Blackbird.Database.Core, statement: OpaquePointer, name: String, for query: String) throws {
+		func bind(database: isolated Ironbird.Database.Core, statement: OpaquePointer, name: String, for query: String) throws {
 			let idx = sqlite3_bind_parameter_index(statement, name)
-			if idx == 0 { throw Blackbird.Database.Error.queryArgumentNameError(query: query, name: name) }
+			if idx == 0 { throw Ironbird.Database.Error.queryArgumentNameError(query: query, name: name) }
 			return try self.bind(database: database, statement: statement, index: idx, for: query)
 		}
 	}
@@ -246,7 +246,7 @@ public enum Blackbird {
 
 // MARK: - Utilities
 
-extension Blackbird {
+extension Ironbird {
 	final class FileChangeMonitor: Sendable {
 		private struct State {
 			var sources: [DispatchSourceFileSystemObject] = []

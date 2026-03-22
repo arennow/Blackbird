@@ -36,16 +36,16 @@ import Synchronization
 
 // MARK: - Schema
 
-public struct BlackbirdModelSchemaResolution: OptionSet, Sendable {
+public struct IronbirdModelSchemaResolution: OptionSet, Sendable {
 	public let rawValue: Int
 	public init(rawValue: Int) { self.rawValue = rawValue }
 
-	public static let createdTable = BlackbirdModelSchemaResolution(rawValue: 1 << 0)
-	public static let migratedTable = BlackbirdModelSchemaResolution(rawValue: 1 << 1)
-	public static let migratedFullTextIndex = BlackbirdModelSchemaResolution(rawValue: 1 << 2)
+	public static let createdTable = IronbirdModelSchemaResolution(rawValue: 1 << 0)
+	public static let migratedTable = IronbirdModelSchemaResolution(rawValue: 1 << 1)
+	public static let migratedFullTextIndex = IronbirdModelSchemaResolution(rawValue: 1 << 2)
 }
 
-extension Blackbird {
+extension Ironbird {
 	enum ColumnType {
 		case integer
 		case double
@@ -104,7 +104,7 @@ extension Blackbird {
 		}
 
 		init(name: String, columnType: ColumnType, valueType: Any.Type, mayBeNull: Bool = false) {
-			if name == "_rowid_" { fatalError("A @BlackbirdColumn cannot be named \"_rowid_\"") }
+			if name == "_rowid_" { fatalError("A @IronbirdColumn cannot be named \"_rowid_\"") }
 			self.name = name
 			self.columnType = columnType
 			self.valueType = valueType
@@ -120,7 +120,7 @@ extension Blackbird {
 				let primaryKeyIndex = row["pk"]?.intValue
 			else { throw Error.cannotParseColumnDefinition(table: tableName, description: "Unexpected format from PRAGMA table_info") }
 
-			guard name != "_rowid_" else { throw Error.cannotParseColumnDefinition(table: tableName, description: "Columns named \"_rowid_\" are not supported in BlackbirdModel tables") }
+			guard name != "_rowid_" else { throw Error.cannotParseColumnDefinition(table: tableName, description: "Columns named \"_rowid_\" are not supported in IronbirdModel tables") }
 
 			guard let columnType = ColumnType.parseType(typeStr) else { throw Error.cannotParseColumnDefinition(table: tableName, description: "Column \"\(name)\" has unsupported type: \"\(typeStr)\"") }
 			self.name = name
@@ -195,7 +195,7 @@ extension Blackbird {
 	}
 
 	struct Table: Hashable {
-		static func == (lhs: Blackbird.Table, rhs: Blackbird.Table) -> Bool {
+		static func == (lhs: Ironbird.Table, rhs: Ironbird.Table) -> Bool {
 			lhs.name == rhs.name && lhs.columns == rhs.columns && lhs.indexes == rhs.indexes && lhs.primaryKeys == rhs.primaryKeys
 		}
 
@@ -214,7 +214,7 @@ extension Blackbird {
 		let fullTextIndex: FullTextIndexSchema?
 		let upsertClause: String
 
-		let emptyInstance: (any BlackbirdModel)?
+		let emptyInstance: (any IronbirdModel)?
 
 		private static let resolvedTablesWithDatabases = Mutex([Table: Set<Database.InstanceID>]())
 		private static let resolvedTableNamesInDatabases = Mutex([Database.InstanceID: Set<String>]())
@@ -225,7 +225,7 @@ extension Blackbird {
 			Self.resolvedTableNamesInDatabases.withLock { $0.removeAll() }
 		}
 
-		init(name: String, columns: [Column], primaryKeyColumnNames: [String] = ["id"], indexes: [Index] = [], fullTextSearchableColumns: [String: BlackbirdModelFullTextSearchableColumn], emptyInstance: any BlackbirdModel) {
+		init(name: String, columns: [Column], primaryKeyColumnNames: [String] = ["id"], indexes: [Index] = [], fullTextSearchableColumns: [String: IronbirdModelFullTextSearchableColumn], emptyInstance: any IronbirdModel) {
 			if columns.isEmpty { fatalError("No columns specified") }
 			let orderedColumnNames = columns.map(\.name)
 			self.emptyInstance = emptyInstance
@@ -248,7 +248,7 @@ extension Blackbird {
 			return upsertReplacements.isEmpty ? "" : "ON CONFLICT (`\(primaryKeyColumnNames.joined(separator: "`,`"))`) DO UPDATE SET \(upsertReplacements.joined(separator: ","))"
 		}
 
-		init?(isolatedCore core: isolated Database.Core, tableName: String, type: any BlackbirdModel.Type) throws {
+		init?(isolatedCore core: isolated Database.Core, tableName: String, type: any IronbirdModel.Type) throws {
 			if tableName.isEmpty { fatalError("Table name cannot be empty") }
 
 			var columns: [Column] = []
@@ -277,16 +277,16 @@ extension Blackbird {
 			self.upsertClause = Self.generateUpsertClause(columnNames: orderedColumnNames, primaryKeyColumnNames: primaryKeyColumns.map(\.name))
 		}
 
-		func keyPathToColumnInfo(keyPath: AnyKeyPath) -> Blackbird.ColumnInfo {
-			guard let emptyInstance else { fatalError("Cannot call keyPathToColumnName on a Blackbird.Table initialized directly from a database") }
-			guard let column = emptyInstance[keyPath: keyPath] as? any ColumnWrapper else { fatalError("Key path is not a @BlackbirdColumn on \(name)") }
+		func keyPathToColumnInfo(keyPath: AnyKeyPath) -> Ironbird.ColumnInfo {
+			guard let emptyInstance else { fatalError("Cannot call keyPathToColumnName on a Ironbird.Table initialized directly from a database") }
+			guard let column = emptyInstance[keyPath: keyPath] as? any ColumnWrapper else { fatalError("Key path is not a @IronbirdColumn on \(name)") }
 			guard let name = column.internalNameInSchemaGenerator.value.withLock({ $0 }) else { fatalError("Failed to look up key-path name on \(self.name)") }
-			return Blackbird.ColumnInfo(name: name, type: column.valueType.self)
+			return Ironbird.ColumnInfo(name: name, type: column.valueType.self)
 		}
 
 		func keyPathToColumnName(keyPath: AnyKeyPath) -> String {
-			guard let emptyInstance else { fatalError("Cannot call keyPathToColumnName on a Blackbird.Table initialized directly from a database") }
-			guard let column = emptyInstance[keyPath: keyPath] as? any ColumnWrapper else { fatalError("Key path is not a @BlackbirdColumn on \(name). Make sure to use the $-prefixed wrapper, e.g. \\.$id.") }
+			guard let emptyInstance else { fatalError("Cannot call keyPathToColumnName on a Ironbird.Table initialized directly from a database") }
+			guard let column = emptyInstance[keyPath: keyPath] as? any ColumnWrapper else { fatalError("Key path is not a @IronbirdColumn on \(name). Make sure to use the $-prefixed wrapper, e.g. \\.$id.") }
 			guard let name = column.internalNameInSchemaGenerator.value.withLock({ $0 }) else { fatalError("Failed to look up key-path name on \(self.name)") }
 			return name
 		}
@@ -297,20 +297,20 @@ extension Blackbird {
 			return keyPathName
 		}
 
-		func createTableStatement(type: (some BlackbirdModel).Type, overrideTableName: String? = nil) -> String {
+		func createTableStatement(type: (some IronbirdModel).Type, overrideTableName: String? = nil) -> String {
 			let columnDefs = self.columns.map { $0.definition() }.joined(separator: ",")
 			let pkDef = self.primaryKeys.isEmpty ? "" : ",PRIMARY KEY (`\(self.primaryKeys.map(\.name).joined(separator: "`,`"))`)"
 			return "CREATE TABLE `\(overrideTableName ?? self.name)` (\(columnDefs)\(pkDef))"
 		}
 
-		func createIndexStatements(type: (some BlackbirdModel).Type) -> [String] { self.indexes.map { $0.definition(tableName: self.name) } }
+		func createIndexStatements(type: (some IronbirdModel).Type) -> [String] { self.indexes.map { $0.definition(tableName: self.name) } }
 
 		@discardableResult
-		func resolveWithDatabase(type: (some BlackbirdModel).Type, database: Database, core: Database.Core, isExplicitResolve: Bool = false, validator: (@Sendable (_ database: Database, _ core: isolated Database.Core) throws -> Void)?) async throws -> BlackbirdModelSchemaResolution {
+		func resolveWithDatabase(type: (some IronbirdModel).Type, database: Database, core: Database.Core, isExplicitResolve: Bool = false, validator: (@Sendable (_ database: Database, _ core: isolated Database.Core) throws -> Void)?) async throws -> IronbirdModelSchemaResolution {
 			if self._isAlreadyResolved(type: type, in: database) { return [] }
 
 			if !isExplicitResolve, database.options.contains(.requireModelSchemaValidationBeforeUse) {
-				fatalError("BlackbirdModel \(String(describing: type)) is being queried before calling resolveSchema(in:) in a database with the .requireModelSchemaValidationBeforeUse option enabled")
+				fatalError("IronbirdModel \(String(describing: type)) is being queried before calling resolveSchema(in:) in a database with the .requireModelSchemaValidationBeforeUse option enabled")
 			}
 
 			return try await core.transaction {
@@ -319,11 +319,11 @@ extension Blackbird {
 		}
 
 		@discardableResult
-		func resolveWithDatabaseIsolated(type: (some BlackbirdModel).Type, database: Database, core: isolated Database.Core, isExplicitResolve: Bool = false, validator: (@Sendable (_ database: Database, _ core: isolated Database.Core) throws -> Void)?) throws -> BlackbirdModelSchemaResolution {
+		func resolveWithDatabaseIsolated(type: (some IronbirdModel).Type, database: Database, core: isolated Database.Core, isExplicitResolve: Bool = false, validator: (@Sendable (_ database: Database, _ core: isolated Database.Core) throws -> Void)?) throws -> IronbirdModelSchemaResolution {
 			if self._isAlreadyResolved(type: type, in: database) { return [] }
 
 			if !isExplicitResolve, database.options.contains(.requireModelSchemaValidationBeforeUse) {
-				fatalError("BlackbirdModel \(String(describing: type)) is being queried before calling resolveSchema(in:) in a database with the .requireModelSchemaValidationBeforeUse option enabled")
+				fatalError("IronbirdModel \(String(describing: type)) is being queried before calling resolveSchema(in:) in a database with the .requireModelSchemaValidationBeforeUse option enabled")
 			}
 
 			return try self._resolveWithDatabaseIsolated(type: type, database: database, core: core, validator: validator)
@@ -332,13 +332,13 @@ extension Blackbird {
 		func _isAlreadyResolved(type: (some Any).Type, in database: Database) -> Bool {
 			let alreadyResolved = Self.resolvedTablesWithDatabases.withLock { $0[self]?.contains(database.id) ?? false }
 			if !alreadyResolved, Self.resolvedTableNamesInDatabases.withLock({ $0[database.id]?.contains(name) ?? false }) {
-				fatalError("Multiple BlackbirdModel types cannot use the same table name (\"\(self.name)\") in one Database")
+				fatalError("Multiple IronbirdModel types cannot use the same table name (\"\(self.name)\") in one Database")
 			}
 			return alreadyResolved
 		}
 
-		private func _resolveWithDatabaseIsolated(type: (some BlackbirdModel).Type, database: Database, core: isolated Database.Core, validator: (@Sendable (_ database: Database, _ core: isolated Database.Core) throws -> Void)?) throws -> BlackbirdModelSchemaResolution {
-			var resolution: BlackbirdModelSchemaResolution = []
+		private func _resolveWithDatabaseIsolated(type: (some IronbirdModel).Type, database: Database, core: isolated Database.Core, validator: (@Sendable (_ database: Database, _ core: isolated Database.Core) throws -> Void)?) throws -> IronbirdModelSchemaResolution {
+			var resolution: IronbirdModelSchemaResolution = []
 
 			// Table not created yet
 			let schemaInDB: Table
@@ -399,8 +399,8 @@ extension Blackbird {
 					// add columns and indexes
 					for columnToAdd in Set(self.columns).subtracting(schemaInDB.columns) {
 						if !columnToAdd.mayBeNull, let valueType = columnToAdd.valueType, valueType is URL.Type {
-							throw BlackbirdTableError.impossibleMigration(type: type,
-																		  description: "Cannot add non-NULL URL column `\(columnToAdd.name)` since default values for existing rows cannot be specified")
+							throw IronbirdTableError.impossibleMigration(type: type,
+																		 description: "Cannot add non-NULL URL column `\(columnToAdd.name)` since default values for existing rows cannot be specified")
 						}
 
 						try core.execute("ALTER TABLE `\(self.name)` ADD COLUMN \(columnToAdd.definition())")
@@ -453,9 +453,9 @@ extension String {
 final class SchemaGenerator: Sendable {
 	static let shared = SchemaGenerator()
 
-	let tableCache = Mutex<[ObjectIdentifier: Blackbird.Table]>([:])
+	let tableCache = Mutex<[ObjectIdentifier: Ironbird.Table]>([:])
 
-	func table(for type: (some BlackbirdModel).Type) -> Blackbird.Table {
+	func table(for type: (some IronbirdModel).Type) -> Ironbird.Table {
 		self.tableCache.withLock { cache in
 			let identifier = ObjectIdentifier(type)
 			if let cached = cache[identifier] { return cached }
@@ -466,23 +466,23 @@ final class SchemaGenerator: Sendable {
 		}
 	}
 
-	static func instanceFromDefaults<T: BlackbirdModel>(_ type: T.Type) -> T {
+	static func instanceFromDefaults<T: IronbirdModel>(_ type: T.Type) -> T {
 		do {
-			return try T(from: BlackbirdDefaultsDecoder())
+			return try T(from: IronbirdDefaultsDecoder())
 		} catch {
-			fatalError("\(String(describing: T.self)) instances cannot be generated by Blackbird's automatic decoding:\n\n" +
+			fatalError("\(String(describing: T.self)) instances cannot be generated by Ironbird's automatic decoding:\n\n" +
 				"    \(error)\n\n" +
 				"    If \(String(describing: T.self)) implements init(from decoder: Decoder), it must\n" +
-				"    return a valid instance when supplied with a BlackbirdDefaultsDecoder.\n\n" +
-				"    See the BlackbirdDefaultsDecoder documentation.\n")
+				"    return a valid instance when supplied with a IronbirdDefaultsDecoder.\n\n" +
+				"    See the IronbirdDefaultsDecoder documentation.\n")
 		}
 	}
 
-	private static func generateTableDefinition<T: BlackbirdModel>(_ type: T.Type) -> Blackbird.Table {
+	private static func generateTableDefinition<T: IronbirdModel>(_ type: T.Type) -> Ironbird.Table {
 		let emptyInstance = self.instanceFromDefaults(type)
 
 		let mirror = Mirror(reflecting: emptyInstance)
-		var columns: [Blackbird.Column] = []
+		var columns: [Ironbird.Column] = []
 		var nullableColumnNames = Set<String>()
 		var hasColumNamedID = false
 		for child in mirror.children {
@@ -503,25 +503,25 @@ final class SchemaGenerator: Sendable {
 					unwrappedType = wrappedType.schemaGeneratorWrappedType()
 				}
 
-				var columnType: Blackbird.ColumnType
+				var columnType: Ironbird.ColumnType
 				switch unwrappedType {
-					case is BlackbirdStorableAsInteger.Type: columnType = .integer
-					case is BlackbirdStorableAsDouble.Type: columnType = .double
-					case is BlackbirdStorableAsText.Type: columnType = .text
-					case is BlackbirdStorableAsData.Type: columnType = .data
-					case is any BlackbirdIntegerEnum.Type: columnType = .integer
-					case is any BlackbirdStringEnum.Type: columnType = .text
+					case is IronbirdStorableAsInteger.Type: columnType = .integer
+					case is IronbirdStorableAsDouble.Type: columnType = .double
+					case is IronbirdStorableAsText.Type: columnType = .text
+					case is IronbirdStorableAsData.Type: columnType = .data
+					case is any IronbirdIntegerEnum.Type: columnType = .integer
+					case is any IronbirdStringEnum.Type: columnType = .text
 					default:
 						fatalError("\(String(describing: T.self)).\(label) is not a supported type for a database column (\(String(describing: unwrappedType)))")
 				}
 
-				columns.append(Blackbird.Column(name: label, columnType: columnType, valueType: unwrappedType, mayBeNull: isOptional))
+				columns.append(Ironbird.Column(name: label, columnType: columnType, valueType: unwrappedType, mayBeNull: isOptional))
 			}
 		}
 
 		let keyPathToColumnName = { (keyPath: AnyKeyPath, messageLabel: String) in
 			guard let column = emptyInstance[keyPath: keyPath] as? any ColumnWrapper else {
-				fatalError("\(String(describing: T.self)): \(messageLabel) includes a key path that is not a @BlackbirdColumn. (Use the \"$\" wrapper for a column.)")
+				fatalError("\(String(describing: T.self)): \(messageLabel) includes a key path that is not a @IronbirdColumn. (Use the \"$\" wrapper for a column.)")
 			}
 
 			guard let name = column.internalNameInSchemaGenerator.value.withLock({ $0 }) else { fatalError("\(String(describing: T.self)): Failed to look up \(messageLabel) key-path name") }
@@ -534,9 +534,9 @@ final class SchemaGenerator: Sendable {
 			else { fatalError("\(String(describing: T.self)): Must specify a primary key or have a property named \"id\" to automatically use as primary key") }
 		}
 
-		var indexes = T.indexes.map { keyPaths in Blackbird.Index(columnNames: keyPaths.map { keyPathToColumnName($0, "index") }, unique: false) }
+		var indexes = T.indexes.map { keyPaths in Ironbird.Index(columnNames: keyPaths.map { keyPathToColumnName($0, "index") }, unique: false) }
 		indexes.append(contentsOf: T.uniqueIndexes.map { keyPaths in
-			Blackbird.Index(columnNames: keyPaths.map {
+			Ironbird.Index(columnNames: keyPaths.map {
 				let name = keyPathToColumnName($0, "unique index")
 				if nullableColumnNames.contains(name), keyPaths.count > 1 {
 					/*
@@ -552,10 +552,10 @@ final class SchemaGenerator: Sendable {
 
 					    ...even though they would not be considered unique values by Swift or most people's assumptions.
 
-					    Since Blackbird tries to abstract away most really weird SQL behaviors that would differ
+					    Since Ironbird tries to abstract away most really weird SQL behaviors that would differ
 					    significantly from what Swift programmers expect, this is intentionally not permitted.
 					 */
-					fatalError("\(String(describing: T.self)): Blackbird does not support multi-column UNIQUE indexes containing NULL columns. " +
+					fatalError("\(String(describing: T.self)): Ironbird does not support multi-column UNIQUE indexes containing NULL columns. " +
 						"Change column \"\(name)\" to non-optional, or create a separate UNIQUE index for it.")
 				}
 				return name
@@ -568,12 +568,12 @@ final class SchemaGenerator: Sendable {
 			if !inserted { fatalError("\(String(describing: T.self)): Duplicate index definitions for [\(index.columnNames.joined(separator: ","))]") }
 		}
 
-		var ftsColumns: [String: BlackbirdModelFullTextSearchableColumn] = [:]
+		var ftsColumns: [String: IronbirdModelFullTextSearchableColumn] = [:]
 		for (key, value) in T.fullTextSearchableColumns {
 			ftsColumns[keyPathToColumnName(key, "fullTextSearchableColumns")] = value
 		}
 
-		return Blackbird.Table(name: T.tableName, columns: columns, primaryKeyColumnNames: primaryKeyNames, indexes: indexes, fullTextSearchableColumns: ftsColumns, emptyInstance: emptyInstance)
+		return Ironbird.Table(name: T.tableName, columns: columns, primaryKeyColumnNames: primaryKeyNames, indexes: indexes, fullTextSearchableColumns: ftsColumns, emptyInstance: emptyInstance)
 	}
 }
 
@@ -582,13 +582,13 @@ final class SchemaGenerator: Sendable {
 //
 // HUGE credit to https://github.com/jjrscott/EmptyInitializer for this decoder trick!
 // The following is a condensed version of that code with minor tweaks, mostly to work
-// with BlackbirdColumn wrappers and support URL as a property type.
+// with IronbirdColumn wrappers and support URL as a property type.
 
-/// A special `Decoder`, used internally by ``BlackbirdModel``, that returns placeholder values for all keys.
+/// A special `Decoder`, used internally by ``IronbirdModel``, that returns placeholder values for all keys.
 ///
-/// Used primarily by ``BlackbirdModel/instanceFromDefaults()`` and schema generation.
+/// Used primarily by ``IronbirdModel/instanceFromDefaults()`` and schema generation.
 ///
-/// For any key, `BlackbirdDefaultsDecoder` returns a default value for the requested type:
+/// For any key, `IronbirdDefaultsDecoder` returns a default value for the requested type:
 ///
 /// Type | Value Returned
 /// --- | ---
@@ -600,20 +600,20 @@ final class SchemaGenerator: Sendable {
 /// `Data` | `Data()` (empty data)
 /// Any `CaseIterable` enum | The enum's first value
 ///
-/// If a ``BlackbirdModel`` does not implement custom decoding, this works automatically.
+/// If a ``IronbirdModel`` does not implement custom decoding, this works automatically.
 ///
-/// If you implement custom decoding in a ``BlackbirdModel`` using `init(from:)`, ensure that a valid instance
-/// is always returned when the supplied `Decoder` argument is a `BlackbirdDefaultsDecoder`.
+/// If you implement custom decoding in a ``IronbirdModel`` using `init(from:)`, ensure that a valid instance
+/// is always returned when the supplied `Decoder` argument is a `IronbirdDefaultsDecoder`.
 ///
 /// ## Example
 ///
 /// ```swift
-/// struct MyCustomDecodedModel: BlackbirdModel {
-///     @BlackbirdColumn var id: Int
-///     @BlackbirdColumn var name: String
-///     @BlackbirdColumn var url: URL
+/// struct MyCustomDecodedModel: IronbirdModel {
+///     @IronbirdColumn var id: Int
+///     @IronbirdColumn var name: String
+///     @IronbirdColumn var url: URL
 ///
-///     enum CodingKeys: String, BlackbirdCodingKey {
+///     enum CodingKeys: String, IronbirdCodingKey {
 ///         case id = "idStr"
 ///         case name
 ///         case url
@@ -625,11 +625,11 @@ final class SchemaGenerator: Sendable {
 ///         // We expect the key "idStr" to contain a String representation
 ///         // of an Int for our `id` property.
 ///         //
-///         // Since BlackbirdDefaultsDecoder returns "" for String, which
+///         // Since IronbirdDefaultsDecoder returns "" for String, which
 ///         // would fail the Int conversion, we supply a placeholder value
-///         // when used with BlackbirdDefaultsDecoder.
+///         // when used with IronbirdDefaultsDecoder.
 ///
-///         if decoder is BlackbirdDefaultsDecoder {
+///         if decoder is IronbirdDefaultsDecoder {
 ///             self.id = 0
 ///         } else {
 ///             let idStr = try container.decode(String.self, forKey: .id)
@@ -646,7 +646,7 @@ final class SchemaGenerator: Sendable {
 /// }
 ///
 /// ```
-public struct BlackbirdDefaultsDecoder: Decoder {
+public struct IronbirdDefaultsDecoder: Decoder {
 	public var codingPath: [CodingKey] = []
 	public var userInfo: [CodingUserInfoKey: Any] = [:]
 	public func container<Key: CodingKey>(keyedBy type: Key.Type) throws -> KeyedDecodingContainer<Key> { KeyedDecodingContainer(EmptyKeyedDecodingContainer<Key>()) }
@@ -673,18 +673,18 @@ fileprivate struct EmptyKeyedDecodingContainer<Key: CodingKey>: KeyedDecodingCon
 	func decode(_ type: UInt16.Type, forKey key: Key) throws -> UInt16 { 0 }
 	func decode(_ type: UInt32.Type, forKey key: Key) throws -> UInt32 { 0 }
 	func decode(_ type: UInt64.Type, forKey key: Key) throws -> UInt64 { 0 }
-	func decode<T>(_ type: BlackbirdColumn<T>.Type, forKey key: Key) throws -> BlackbirdColumn<T> { BlackbirdColumn<T>(wrappedValue: try T(from: BlackbirdDefaultsDecoder())) }
+	func decode<T>(_ type: IronbirdColumn<T>.Type, forKey key: Key) throws -> IronbirdColumn<T> { IronbirdColumn<T>(wrappedValue: try T(from: IronbirdDefaultsDecoder())) }
 	func decode<T: Decodable>(_ type: T.Type, forKey key: Key) throws -> T {
 		if T.self == URL.self { return URL(string: "https://apple.com/") as! T }
 		if T.self == Data.self { return Data() as! T }
 		if T.self == Date.self { return Date.distantPast as! T }
 		if let iterableT = T.self as? any CaseIterable.Type, let first = (iterableT.allCases as any Collection).first { return first as! T }
-		return try T(from: BlackbirdDefaultsDecoder())
+		return try T(from: IronbirdDefaultsDecoder())
 	}
 
 	func nestedUnkeyedContainer(forKey key: Key) throws -> UnkeyedDecodingContainer { EmptyUnkeyedDecodingContainer() }
-	func superDecoder() throws -> Decoder { BlackbirdDefaultsDecoder() }
-	func superDecoder(forKey key: Key) throws -> Decoder { BlackbirdDefaultsDecoder() }
+	func superDecoder() throws -> Decoder { IronbirdDefaultsDecoder() }
+	func superDecoder(forKey key: Key) throws -> Decoder { IronbirdDefaultsDecoder() }
 	func nestedContainer<NestedKey: CodingKey>(keyedBy type: NestedKey.Type, forKey key: Key) throws -> KeyedDecodingContainer<NestedKey> {
 		KeyedDecodingContainer(EmptyKeyedDecodingContainer<NestedKey>())
 	}
@@ -707,12 +707,12 @@ fileprivate struct EmptySingleValueDecodingContainer: SingleValueDecodingContain
 	func decode(_ type: UInt16.Type) throws -> UInt16 { 0 }
 	func decode(_ type: UInt32.Type) throws -> UInt32 { 0 }
 	func decode(_ type: UInt64.Type) throws -> UInt64 { 0 }
-	func decode<T>(_ type: BlackbirdColumn<T>.Type) throws -> BlackbirdColumn<T> { BlackbirdColumn<T>(wrappedValue: try T(from: BlackbirdDefaultsDecoder())) }
+	func decode<T>(_ type: IronbirdColumn<T>.Type) throws -> IronbirdColumn<T> { IronbirdColumn<T>(wrappedValue: try T(from: IronbirdDefaultsDecoder())) }
 	func decode<T: Decodable>(_ type: T.Type) throws -> T {
 		if T.self == URL.self { return URL(string: "https://apple.com/") as! T }
 		if T.self == Data.self { return Data() as! T }
 		if let iterableT = T.self as? any CaseIterable.Type, let first = (iterableT.allCases as any Collection).first { return first as! T }
-		return try T(from: BlackbirdDefaultsDecoder())
+		return try T(from: IronbirdDefaultsDecoder())
 	}
 }
 
@@ -736,16 +736,16 @@ fileprivate struct EmptyUnkeyedDecodingContainer: UnkeyedDecodingContainer {
 	mutating func decode(_ type: UInt16.Type) throws -> UInt16 { 0 }
 	mutating func decode(_ type: UInt32.Type) throws -> UInt32 { 0 }
 	mutating func decode(_ type: UInt64.Type) throws -> UInt64 { 0 }
-	mutating func decode<T>(_ type: BlackbirdColumn<T>.Type) throws -> BlackbirdColumn<T> { BlackbirdColumn<T>(wrappedValue: try T(from: BlackbirdDefaultsDecoder())) }
+	mutating func decode<T>(_ type: IronbirdColumn<T>.Type) throws -> IronbirdColumn<T> { IronbirdColumn<T>(wrappedValue: try T(from: IronbirdDefaultsDecoder())) }
 	mutating func decode<T: Decodable>(_ type: T.Type) throws -> T {
 		if T.self == URL.self { return URL(string: "file:///") as! T }
 		if T.self == Data.self { return Data() as! T }
 		if let iterableT = T.self as? any CaseIterable.Type, let first = (iterableT.allCases as any Collection).first { return first as! T }
-		return try T(from: BlackbirdDefaultsDecoder())
+		return try T(from: IronbirdDefaultsDecoder())
 	}
 
 	mutating func nestedUnkeyedContainer() throws -> UnkeyedDecodingContainer { EmptyUnkeyedDecodingContainer() }
-	mutating func superDecoder() throws -> Decoder { BlackbirdDefaultsDecoder() }
+	mutating func superDecoder() throws -> Decoder { IronbirdDefaultsDecoder() }
 	mutating func nestedContainer<NestedKey: CodingKey>(keyedBy type: NestedKey.Type) throws -> KeyedDecodingContainer<NestedKey> {
 		KeyedDecodingContainer(EmptyKeyedDecodingContainer<NestedKey>())
 	}

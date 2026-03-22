@@ -50,7 +50,7 @@ import OSLog
 /// ## Example
 /// ```swift
 ///
-/// let perfLogger = PerformanceLogger(subsytem: Blackbird.loggingSubsystem, category: "Database.Core")
+/// let perfLogger = PerformanceLogger(subsytem: Ironbird.loggingSubsystem, category: "Database.Core")
 /// // ...
 /// let signpostState = perLogger.begin(signpost: .execute, message: "Some explanatory text")
 /// // ...
@@ -59,8 +59,8 @@ import OSLog
 /// }
 /// ```
 ///
-extension Blackbird {
-	static let loggingSubsystem = "org.marco.blackbird"
+extension Ironbird {
+	static let loggingSubsystem = "com.lithiumcube.ironbird"
 
 	struct PerformanceLogger {
 		let log: Logger // The logger object. Exposed so it can be used directly.

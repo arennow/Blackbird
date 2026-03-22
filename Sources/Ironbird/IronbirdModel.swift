@@ -37,42 +37,42 @@ import Foundation
 ///
 /// **Example:** A simple model:
 /// ```swift
-/// struct Post: BlackbirdModel {
-///     @BlackbirdColumn var id: Int
-///     @BlackbirdColumn var title: String
-///     @BlackbirdColumn var url: URL?
+/// struct Post: IronbirdModel {
+///     @IronbirdColumn var id: Int
+///     @IronbirdColumn var title: String
+///     @IronbirdColumn var url: URL?
 /// }
 /// ```
 /// > If the primary key is not specified, it is assumed to be a column named `"id"`.
 ///
 /// **Example:** A model with a custom primary-key column:
 /// ```swift
-/// struct CustomPrimaryKeyModel: BlackbirdModel {
-///     static var primaryKey: [BlackbirdColumnKeyPath] = [ \.$pk ]
+/// struct CustomPrimaryKeyModel: IronbirdModel {
+///     static var primaryKey: [IronbirdColumnKeyPath] = [ \.$pk ]
 ///
-///     @BlackbirdColumn var pk: Int
-///     @BlackbirdColumn var title: String
+///     @IronbirdColumn var pk: Int
+///     @IronbirdColumn var title: String
 /// }
 /// ```
 ///
 /// **Example:** A model with indexes and a multicolumn primary key:
 /// ```swift
-/// struct Post: BlackbirdModel {
-///     @BlackbirdColumn var id: Int
-///     @BlackbirdColumn var title: String
-///     @BlackbirdColumn var date: Date
-///     @BlackbirdColumn var isPublished: Bool
-///     @BlackbirdColumn var url: URL?
-///     @BlackbirdColumn var productID: Int
+/// struct Post: IronbirdModel {
+///     @IronbirdColumn var id: Int
+///     @IronbirdColumn var title: String
+///     @IronbirdColumn var date: Date
+///     @IronbirdColumn var isPublished: Bool
+///     @IronbirdColumn var url: URL?
+///     @IronbirdColumn var productID: Int
 ///
-///     static var primaryKey: [BlackbirdColumnKeyPath] = [ \.$id, \.$title ]
+///     static var primaryKey: [IronbirdColumnKeyPath] = [ \.$id, \.$title ]
 ///
-///     static var indexes: [[BlackbirdColumnKeyPath]] = [
+///     static var indexes: [[IronbirdColumnKeyPath]] = [
 ///         [ \.$title ],
 ///         [ \.$isPublished, \.$date ]
 ///     ]
 ///
-///     static var uniqueIndexes: [[BlackbirdColumnKeyPath]] = [
+///     static var uniqueIndexes: [[IronbirdColumnKeyPath]] = [
 ///         [ \.$productID ]
 ///     ]
 /// }
@@ -89,13 +89,13 @@ import Foundation
 ///
 /// If the migration fails, an error will be thrown.
 ///
-/// Schema migrations are performed when the first `BlackbirdModel` database operation is performed for a given table.
+/// Schema migrations are performed when the first `IronbirdModel` database operation is performed for a given table.
 /// To perform any necessary migrations in advance, you may optionally call ``resolveSchema(in:)``.
 ///
 /// ## Reading and writing
 /// Most reads and writes are performed asynchronously:
 /// ```swift
-/// let db = try Blackbird.Database(path: "/tmp/test.sqlite")
+/// let db = try Ironbird.Database(path: "/tmp/test.sqlite")
 ///
 /// // Write a new instance to the database
 /// let post = Post(id: 1, title: "What I had for breakfast")
@@ -130,17 +130,17 @@ import Foundation
 /// try await Post.update(in: db, set: [ $title : "New title" ], matching: \.$id == 1)
 /// ```
 ///
-/// Synchronous access is provided in ``Blackbird/Database/transaction(_:)``.
+/// Synchronous access is provided in ``Ironbird/Database/transaction(_:)``.
 ///
 /// ## Change notifications
-/// When a table is modified, its ``Blackbird/ChangeSequence`` emits a ``Blackbird/Change`` specifying which primary-key values and columns have changed:
+/// When a table is modified, its ``Ironbird/ChangeSequence`` emits a ``Ironbird/Change`` specifying which primary-key values and columns have changed:
 /// ```swift
 /// for await change in Post.changeSequence(in: db) {
 ///     print("Post IDs changed: \(change.primaryKeys ?? "all of them")")
 /// }
 /// ```
 ///
-/// These can be automatically filtered with ``BlackbirdModel/changeSequence(in:primaryKey:columns:)`` to specific primary-key values and/or columns that may have changed:
+/// These can be automatically filtered with ``IronbirdModel/changeSequence(in:primaryKey:columns:)`` to specific primary-key values and/or columns that may have changed:
 ///
 /// ```swift
 /// for await _ in Post.changeSequence(in: db, primaryKey: 3, columns: [\.$title]) {
@@ -153,12 +153,12 @@ import Foundation
 /// Adding support for [SQLite FTS5 full-text search](https://sqlite.org/fts5.html) is simple:
 ///
 /// ```swift
-/// struct Post: BlackbirdModel {
-///     @BlackbirdColumn var id: Int
-///     @BlackbirdColumn var title: String
-///     @BlackbirdColumn var description: String
-///     @BlackbirdColumn var category: Int
-///     @BlackbirdColumn var popularity: Double
+/// struct Post: IronbirdModel {
+///     @IronbirdColumn var id: Int
+///     @IronbirdColumn var title: String
+///     @IronbirdColumn var description: String
+///     @IronbirdColumn var category: Int
+///     @IronbirdColumn var popularity: Double
 ///
 ///     static var fullTextSearchableColumns: FullTextIndex = [
 ///         \.$title       : .text(weight: 3.0),
@@ -187,18 +187,18 @@ import Foundation
 ///
 /// ## Unsupported SQLite features
 ///
-/// `BlackbirdModel` assumes simple and straightforward SQLite usage.
+/// `IronbirdModel` assumes simple and straightforward SQLite usage.
 ///
 /// Features such as foreign keys, virtual tables, views, autoincrement, partial or expression indexes, attached databases, etc.
 /// are unsupported and untested.
 ///
-/// While ``Blackbird/Database`` should work with a more broad set of SQL and SQLite features,
-/// `BlackbirdModel` should not be used with tables or queries involving them,
+/// While ``Ironbird/Database`` should work with a more broad set of SQL and SQLite features,
+/// `IronbirdModel` should not be used with tables or queries involving them,
 /// and their use may cause some features not to behave as expected.
 ///
-public protocol BlackbirdModel: Codable, Equatable, Identifiable, Hashable, Sendable {
-	/// A key-path to any `@BlackbirdColumn`-wrapped variable of this type, e.g. `\.$id` or `\.$title`.
-	typealias BlackbirdColumnKeyPath = PartialKeyPath<Self>
+public protocol IronbirdModel: Codable, Equatable, Identifiable, Hashable, Sendable {
+	/// A key-path to any `@IronbirdColumn`-wrapped variable of this type, e.g. `\.$id` or `\.$title`.
+	typealias IronbirdColumnKeyPath = PartialKeyPath<Self>
 
 	/// The table name to use in the database. By default, the type's name is used.
 	static var tableName: String { get }
@@ -206,25 +206,25 @@ public protocol BlackbirdModel: Codable, Equatable, Identifiable, Hashable, Send
 	/// The column or columns to use as the primary key in the database table.
 	///
 	/// If unspecified, the primary key is assumed to be a single column named `id`, and if no such column exists, an error is thrown.
-	static var primaryKey: [BlackbirdColumnKeyPath] { get }
+	static var primaryKey: [IronbirdColumnKeyPath] { get }
 
 	/// An array of arrays, each specifying an index to create on the database table.
 	///
 	/// The primary key is always implicitly indexed. Do not specify it as a separate index.
 	///
 	/// If unspecified, no additional indexes are created.
-	static var indexes: [[BlackbirdColumnKeyPath]] { get }
+	static var indexes: [[IronbirdColumnKeyPath]] { get }
 
 	/// An array of arrays, each specifying an index to create on the database table in which each row must have a unique value or `NULL`.
 	///
 	/// The primary key is always implicitly uniquely indexed. Do not specify it as a separate index.
 	///
 	/// If unspecified, no additional unique indexes are created.
-	static var uniqueIndexes: [[BlackbirdColumnKeyPath]] { get }
+	static var uniqueIndexes: [[IronbirdColumnKeyPath]] { get }
 
-	typealias FullTextIndex = [BlackbirdColumnKeyPath: BlackbirdModelFullTextSearchableColumn]
+	typealias FullTextIndex = [IronbirdColumnKeyPath: IronbirdModelFullTextSearchableColumn]
 
-	/// A dictionary of column key-paths to ``BlackbirdModelFullTextSearchableColumn`` definitions for a [SQLite FTS5](https://sqlite.org/fts5.html) full-text index for this table.
+	/// A dictionary of column key-paths to ``IronbirdModelFullTextSearchableColumn`` definitions for a [SQLite FTS5](https://sqlite.org/fts5.html) full-text index for this table.
 	///
 	/// If unspecified or empty, no full-text index is created.
 	///
@@ -244,51 +244,51 @@ public protocol BlackbirdModel: Codable, Equatable, Identifiable, Hashable, Send
 	/// > Note: The cache is not limited in byte size — only entry count. Use caution with memory usage if enabled for large tables.
 	static var cacheLimit: Int { get }
 
-	/// How row-level migration failures should be handled. The default is ``BlackbirdModelMigrationErrorAction/throwError``.
+	/// How row-level migration failures should be handled. The default is ``IronbirdModelMigrationErrorAction/throwError``.
 	///
 	/// Row-level migration failures may be caused when:
 	///
 	/// * A column is changed to a non-optional `URL` or `enum` type, and some existing rows in the table have values that are not valid for that type.
 	/// * An `enum` column has cases removed or raw values changed, and some existing rows in the table have raw values that are no longer in the `enum`.
 	///
-	/// If ``BlackbirdModelMigrationErrorAction/throwError`` is specified, a ``BlackbirdTableError/impossibleMigration(type:description:)`` error will be thrown for such failures in this model's table.
+	/// If ``IronbirdModelMigrationErrorAction/throwError`` is specified, a ``IronbirdTableError/impossibleMigration(type:description:)`` error will be thrown for such failures in this model's table.
 	///
-	/// If ``BlackbirdModelMigrationErrorAction/deleteData`` is specified, any rows in the table causing such failures will be deleted during the migration.
-	static var invalidRowDataMigrationResolution: BlackbirdModelMigrationErrorAction { get }
+	/// If ``IronbirdModelMigrationErrorAction/deleteData`` is specified, any rows in the table causing such failures will be deleted during the migration.
+	static var invalidRowDataMigrationResolution: IronbirdModelMigrationErrorAction { get }
 }
 
-public enum BlackbirdModelMigrationErrorAction: Sendable {
-	/// Throw a ``BlackbirdTableError/impossibleMigration(type:description:)`` error.
+public enum IronbirdModelMigrationErrorAction: Sendable {
+	/// Throw a ``IronbirdTableError/impossibleMigration(type:description:)`` error.
 	case throwError
 
 	/// Delete the row or table causing the migration failure.
 	case deleteData
 }
 
-public enum BlackbirdTableError: Swift.Error {
+public enum IronbirdTableError: Swift.Error {
 	/// Schema migration is impossible for the specified type.
-	case impossibleMigration(type: any BlackbirdModel.Type, description: String)
+	case impossibleMigration(type: any IronbirdModel.Type, description: String)
 }
 
-extension BlackbirdModel {
-	static var table: Blackbird.Table { SchemaGenerator.shared.table(for: Self.self) }
+extension IronbirdModel {
+	static var table: Ironbird.Table { SchemaGenerator.shared.table(for: Self.self) }
 }
 
-public extension BlackbirdModel {
+public extension IronbirdModel {
 	static var tableName: String { String(describing: Self.self) }
-	static var primaryKey: [BlackbirdColumnKeyPath] { [] }
-	static var indexes: [[BlackbirdColumnKeyPath]] { [] }
-	static var uniqueIndexes: [[BlackbirdColumnKeyPath]] { [] }
+	static var primaryKey: [IronbirdColumnKeyPath] { [] }
+	static var indexes: [[IronbirdColumnKeyPath]] { [] }
+	static var uniqueIndexes: [[IronbirdColumnKeyPath]] { [] }
 	static var fullTextSearchableColumns: FullTextIndex { [:] }
 	static var cacheLimit: Int { 0 }
-	static var invalidRowDataMigrationResolution: BlackbirdModelMigrationErrorAction { .throwError }
+	static var invalidRowDataMigrationResolution: IronbirdModelMigrationErrorAction { .throwError }
 
 	// Identifiable
 	var id: [AnyHashable] {
 		let primaryKeyPaths = Self.primaryKey
 		if primaryKeyPaths.count > 0 {
 			return primaryKeyPaths.map {
-				guard let wrapper = self[keyPath: $0] as? any ColumnWrapper else { fatalError("Cannot access @BlackbirdColumn wrapper from primaryKey") }
+				guard let wrapper = self[keyPath: $0] as? any ColumnWrapper else { fatalError("Cannot access @IronbirdColumn wrapper from primaryKey") }
 				return AnyHashable(wrapper.value)
 			}
 		} else {
@@ -305,10 +305,10 @@ public extension BlackbirdModel {
 	// Hashable
 	func hash(into hasher: inout Hasher) { hasher.combine(self.id) }
 
-	/// Look up ``Blackbird/ColumnInfo`` instances from key-paths to `@BlackbirdColumn` variables.
-	static func columnInfoFromKeyPaths(_ keyPaths: [PartialKeyPath<Self>]) -> [PartialKeyPath<Self>: Blackbird.ColumnInfo] {
+	/// Look up ``Ironbird/ColumnInfo`` instances from key-paths to `@IronbirdColumn` variables.
+	static func columnInfoFromKeyPaths(_ keyPaths: [PartialKeyPath<Self>]) -> [PartialKeyPath<Self>: Ironbird.ColumnInfo] {
 		let table = Self.table
-		var infos: [PartialKeyPath<Self>: Blackbird.ColumnInfo] = [:]
+		var infos: [PartialKeyPath<Self>: Ironbird.ColumnInfo] = [:]
 		for keyPath in keyPaths {
 			infos[keyPath] = table.keyPathToColumnInfo(keyPath: keyPath)
 		}
@@ -318,8 +318,8 @@ public extension BlackbirdModel {
 	/// The set of column names, as strings, that have changed since its last save to the specified database.
 	///
 	/// This function errs toward over-reporting. If the instance was created by other means and was not read from a database, or it was read from a different database, it will return the names of all columns.
-	func changedColumns(in database: Blackbird.Database) -> Blackbird.ColumnNames {
-		Blackbird.ColumnNames(Mirror(reflecting: self).children.compactMap { (label: String?, value: Any) in
+	func changedColumns(in database: Ironbird.Database) -> Ironbird.ColumnNames {
+		Ironbird.ColumnNames(Mirror(reflecting: self).children.compactMap { (label: String?, value: Any) in
 			guard let column = value as? any ColumnWrapper, column.hasChanged(in: database) else { return nil }
 			return label?.removingLeadingUnderscore()
 		})
@@ -329,28 +329,28 @@ public extension BlackbirdModel {
 	static func instanceFromDefaults() -> Self { SchemaGenerator.instanceFromDefaults(Self.self) }
 
 	/// The change sequence for this model's table.
-	/// - Parameter database: The ``Blackbird/Database`` instance to monitor.
-	/// - Returns: The ``Blackbird/ModelChangeSequence`` for this model's table.
+	/// - Parameter database: The ``Ironbird/Database`` instance to monitor.
+	/// - Returns: The ``Ironbird/ModelChangeSequence`` for this model's table.
 	///
-	/// See ``BlackbirdModel/changeSequence(in:primaryKey:columns:)`` for built-in filtering by primary-key and/or changed columns.
+	/// See ``IronbirdModel/changeSequence(in:primaryKey:columns:)`` for built-in filtering by primary-key and/or changed columns.
 	///
 	/// > - Changes may be over-reported.
-	static func changeSequence(in database: Blackbird.Database) -> some AsyncSequence<Blackbird.ModelChange<Self>, Never> & Sendable {
+	static func changeSequence(in database: Ironbird.Database) -> some AsyncSequence<Ironbird.ModelChange<Self>, Never> & Sendable {
 		database.changeReporter.changeSequence(for: self.tableName)
-			.map { Blackbird.ModelChange(type: Self.self, from: $0) }
+			.map { Ironbird.ModelChange(type: Self.self, from: $0) }
 	}
 
 	/// The change sequence for this model's table, filtered by single-column primary key and/or changed columns.
 	/// - Parameters:
-	///   - database: The ``Blackbird/Database`` instance to monitor.
+	///   - database: The ``Ironbird/Database`` instance to monitor.
 	///   - primaryKey: The single-column primary-key value set to monitor. If `nil`, changes to any keys are reported.
 	///   - columns: Specific columns to monitor. If empty, changes to any column(s) are reported.
-	/// - Returns: The filtered ``Blackbird/ModelChangeSequence``.
+	/// - Returns: The filtered ``Ironbird/ModelChangeSequence``.
 	///
-	/// Use ``BlackbirdModel/changeSequence(in:multicolumnPrimaryKey:columns:)`` for models with multi-column primary keys.
+	/// Use ``IronbirdModel/changeSequence(in:multicolumnPrimaryKey:columns:)`` for models with multi-column primary keys.
 	///
 	/// > - Changes may be over-reported.
-	static func changeSequence(in database: Blackbird.Database, primaryKey: Blackbird.Value? = nil, columns: [Self.BlackbirdColumnKeyPath] = []) -> some AsyncSequence<Blackbird.ModelChange<Self>, Never> & Sendable {
+	static func changeSequence(in database: Ironbird.Database, primaryKey: Ironbird.Value? = nil, columns: [Self.IronbirdColumnKeyPath] = []) -> some AsyncSequence<Ironbird.ModelChange<Self>, Never> & Sendable {
 		if primaryKey != nil, self.table.primaryKeys.count > 1 { fatalError("\(String(describing: Self.self)).changeSequence: Single-column primary key value specified on table with a multi-column primary key") }
 		let selfType = Self.self
 
@@ -358,53 +358,53 @@ public extension BlackbirdModel {
 			if let primaryKey, let changedKeys = change.primaryKeys, !changedKeys.contains([primaryKey]) { return false }
 
 			if !columns.isEmpty, let changedColumns = change.columnNames {
-				let columnNames = Blackbird.ColumnNames(columns.map { self.table.keyPathToColumnName(keyPath: $0) })
+				let columnNames = Ironbird.ColumnNames(columns.map { self.table.keyPathToColumnName(keyPath: $0) })
 				if columnNames.isDisjoint(with: changedColumns) { return false }
 			}
 
 			return true
 		}.map {
-			Blackbird.ModelChange(type: selfType, from: $0)
+			Ironbird.ModelChange(type: selfType, from: $0)
 		}
 	}
 
 	/// The change sequence for this model's table, filtered by multi-column primary key and/or changed columns.
 	/// - Parameters:
-	///   - database: The ``Blackbird/Database`` instance to monitor.
+	///   - database: The ``Ironbird/Database`` instance to monitor.
 	///   - multicolumnPrimaryKey: The multi-column primary-key value set to monitor. If `nil`, changes to any keys are reported.
 	///   - columns: Specific columns to monitor. If empty, changes to any column(s) are reported.
-	/// - Returns: The filtered ``Blackbird/ChangeSequence``.
+	/// - Returns: The filtered ``Ironbird/ChangeSequence``.
 	///
-	/// Use ``BlackbirdModel/changeSequence(in:primaryKey:columns:)`` for models with single-column primary keys.
+	/// Use ``IronbirdModel/changeSequence(in:primaryKey:columns:)`` for models with single-column primary keys.
 	///
 	/// > - Changes may be over-reported.
-	static func changeSequence(in database: Blackbird.Database, multicolumnPrimaryKey: [Blackbird.Value]?, columns: [Self.BlackbirdColumnKeyPath] = []) -> some AsyncSequence<Blackbird.ModelChange<Self>, Never> & Sendable {
+	static func changeSequence(in database: Ironbird.Database, multicolumnPrimaryKey: [Ironbird.Value]?, columns: [Self.IronbirdColumnKeyPath] = []) -> some AsyncSequence<Ironbird.ModelChange<Self>, Never> & Sendable {
 		let selfType = Self.self
 		return database.changeReporter.changeSequence(for: self.tableName).filter { change in
 			if let multicolumnPrimaryKey, let changedKeys = change.primaryKeys, !changedKeys.contains(multicolumnPrimaryKey) { return false }
 
 			if !columns.isEmpty, let changedColumns = change.columnNames {
-				let columnNames = Blackbird.ColumnNames(columns.map { self.table.keyPathToColumnName(keyPath: $0) })
+				let columnNames = Ironbird.ColumnNames(columns.map { self.table.keyPathToColumnName(keyPath: $0) })
 				if columnNames.isDisjoint(with: changedColumns) { return false }
 			}
 
 			return true
 		}.map {
-			Blackbird.ModelChange(type: selfType, from: $0)
+			Ironbird.ModelChange(type: selfType, from: $0)
 		}
 	}
 
 	/// The change sequence for this model's table, filtered by single-column primary key and/or ignored columns.
 	/// - Parameters:
-	///   - database: The ``Blackbird/Database`` instance to monitor.
+	///   - database: The ``Ironbird/Database`` instance to monitor.
 	///   - primaryKey: The single-column primary-key value set to monitor. If `nil`, changes to any keys are reported.
 	///   - ignoredColumns: Specific columns to ignore if changed. If empty, changes to any column(s) are reported.
-	/// - Returns: The filtered ``Blackbird/ModelChangeSequence``.
+	/// - Returns: The filtered ``Ironbird/ModelChangeSequence``.
 	///
-	/// Use ``BlackbirdModel/changeSequence(in:multicolumnPrimaryKey:ignoredColumns:)`` for models with multi-column primary keys.
+	/// Use ``IronbirdModel/changeSequence(in:multicolumnPrimaryKey:ignoredColumns:)`` for models with multi-column primary keys.
 	///
 	/// > - Changes may be over-reported.
-	static func changeSequence(in database: Blackbird.Database, primaryKey: Blackbird.Value? = nil, ignoredColumns: [Self.BlackbirdColumnKeyPath]) -> some AsyncSequence<Blackbird.ModelChange<Self>, Never> & Sendable {
+	static func changeSequence(in database: Ironbird.Database, primaryKey: Ironbird.Value? = nil, ignoredColumns: [Self.IronbirdColumnKeyPath]) -> some AsyncSequence<Ironbird.ModelChange<Self>, Never> & Sendable {
 		if primaryKey != nil, self.table.primaryKeys.count > 1 { fatalError("\(String(describing: Self.self)).changeSequence: Single-column primary key value specified on table with a multi-column primary key") }
 		let selfType = Self.self
 
@@ -412,75 +412,75 @@ public extension BlackbirdModel {
 			if let primaryKey, let changedKeys = change.primaryKeys, !changedKeys.contains([primaryKey]) { return false }
 
 			if !ignoredColumns.isEmpty, let changedColumns = change.columnNames {
-				let columnNames = Blackbird.ColumnNames(ignoredColumns.map { self.table.keyPathToColumnName(keyPath: $0) })
+				let columnNames = Ironbird.ColumnNames(ignoredColumns.map { self.table.keyPathToColumnName(keyPath: $0) })
 				if changedColumns.isSubset(of: columnNames) { return false }
 			}
 
 			return true
 		}.map {
-			Blackbird.ModelChange(type: selfType, from: $0)
+			Ironbird.ModelChange(type: selfType, from: $0)
 		}
 	}
 
 	/// The change sequence for this model's table, filtered by multi-column primary key and/or ignored columns.
 	/// - Parameters:
-	///   - database: The ``Blackbird/Database`` instance to monitor.
+	///   - database: The ``Ironbird/Database`` instance to monitor.
 	///   - multicolumnPrimaryKey: The multi-column primary-key value set to monitor. If `nil`, changes to any keys are reported.
 	///   - ignoredColumns: Specific columns to ignore if changed. If empty, changes to any column(s) are reported.
-	/// - Returns: The filtered ``Blackbird/ChangeSequence``.
+	/// - Returns: The filtered ``Ironbird/ChangeSequence``.
 	///
-	/// Use ``BlackbirdModel/changeSequence(in:primaryKey:ignoredColumns:)`` for models with single-column primary keys.
+	/// Use ``IronbirdModel/changeSequence(in:primaryKey:ignoredColumns:)`` for models with single-column primary keys.
 	///
 	/// > - Changes may be over-reported.
-	static func changeSequence(in database: Blackbird.Database, multicolumnPrimaryKey: [Blackbird.Value]?, ignoredColumns: [Self.BlackbirdColumnKeyPath]) -> some AsyncSequence<Blackbird.ModelChange<Self>, Never> & Sendable {
+	static func changeSequence(in database: Ironbird.Database, multicolumnPrimaryKey: [Ironbird.Value]?, ignoredColumns: [Self.IronbirdColumnKeyPath]) -> some AsyncSequence<Ironbird.ModelChange<Self>, Never> & Sendable {
 		let selfType = Self.self
 		return database.changeReporter.changeSequence(for: self.tableName).filter { change in
 			if let multicolumnPrimaryKey, let changedKeys = change.primaryKeys, !changedKeys.contains(multicolumnPrimaryKey) { return false }
 
 			if !ignoredColumns.isEmpty, let changedColumns = change.columnNames {
-				let columnNames = Blackbird.ColumnNames(ignoredColumns.map { self.table.keyPathToColumnName(keyPath: $0) })
+				let columnNames = Ironbird.ColumnNames(ignoredColumns.map { self.table.keyPathToColumnName(keyPath: $0) })
 				if changedColumns.isSubset(of: columnNames) { return false }
 			}
 
 			return true
 		}.map {
-			Blackbird.ModelChange(type: selfType, from: $0)
+			Ironbird.ModelChange(type: selfType, from: $0)
 		}
 	}
 
 	/// Reads a single instance with the given primary-key value from a database if the primary key is a single column named `id`.
 	/// - Parameters:
-	///   - database: The ``Blackbird/Database`` instance to read from.
+	///   - database: The ``Ironbird/Database`` instance to read from.
 	///   - id: The value of the `id` column.
 	/// - Returns: The first decoded instance in the table with the given `id`, or `nil` if a corresponding instance doesn't exist in the table.
 	///
 	/// For tables with other primary-key names, see ``read(from:primaryKey:)`` and ``read(from:multicolumnPrimaryKey:)-926f3``.
-	static func read(from database: Blackbird.Database, id: Sendable) async throws -> Self? {
+	static func read(from database: Ironbird.Database, id: Sendable) async throws -> Self? {
 		let primaryKeyPaths = self.primaryKey
 		if let firstKeyPath = primaryKeyPaths.first, table.keyPathToColumnName(keyPath: firstKeyPath) != "id" || primaryKeyPaths.count > 1 {
 			fatalError("read(from:id:) requires that the primary key be only \"id\"")
 		}
 
-		let idValue = try Blackbird.Value.fromAny(id)
+		let idValue = try Ironbird.Value.fromAny(id)
 		if let cached = _cachedInstance(for: database, primaryKeyValue: idValue) { return cached }
 		return try await self._readInternal(from: database, query: "SELECT * FROM $T WHERE id = ?", arguments: [idValue]).first
 	}
 
-	/// Synchronous version of ``read(from:id:)`` for use when the database actor is isolated within calls to ``Blackbird/Database/transaction(_:)`` or ``Blackbird/Database/cancellableTransaction(_:)``.
-	static func readIsolated(from database: Blackbird.Database, core: isolated Blackbird.Database.Core, id: Sendable) throws -> Self? {
+	/// Synchronous version of ``read(from:id:)`` for use when the database actor is isolated within calls to ``Ironbird/Database/transaction(_:)`` or ``Ironbird/Database/cancellableTransaction(_:)``.
+	static func readIsolated(from database: Ironbird.Database, core: isolated Ironbird.Database.Core, id: Sendable) throws -> Self? {
 		let primaryKeyPaths = self.primaryKey
 		if let firstKeyPath = primaryKeyPaths.first, table.keyPathToColumnName(keyPath: firstKeyPath) != "id" || primaryKeyPaths.count > 1 {
 			fatalError("read(from:id:) requires that the primary key be only \"id\"")
 		}
 
-		let idValue = try Blackbird.Value.fromAny(id)
+		let idValue = try Ironbird.Value.fromAny(id)
 		if let cached = _cachedInstance(for: database, primaryKeyValue: idValue) { return cached }
 		return try self._readInternalIsolated(from: database, core: core, query: "SELECT * FROM $T WHERE id = ?", arguments: [idValue]).first
 	}
 
 	/// Reads a single instance with the given primary-key value from a database.
 	/// - Parameters:
-	///   - database: The ``Blackbird/Database`` instance to read from.
+	///   - database: The ``Ironbird/Database`` instance to read from.
 	///   - primaryKey: The value of the primary-key column.
 	/// - Returns: The decoded instance in the table with the given primary key, or `nil` if a corresponding instance doesn't exist in the table.
 	///
@@ -489,13 +489,13 @@ public extension BlackbirdModel {
 	/// For tables with multi-column primary keys, use ``read(from:multicolumnPrimaryKey:)-926f3``.
 	///
 	/// For tables with a single-column primary key named `id`, ``read(from:id:)`` is more concise.
-	static func read(from database: Blackbird.Database, primaryKey: Sendable) async throws -> Self? { try await self.read(from: database, multicolumnPrimaryKey: [primaryKey]) }
+	static func read(from database: Ironbird.Database, primaryKey: Sendable) async throws -> Self? { try await self.read(from: database, multicolumnPrimaryKey: [primaryKey]) }
 
-	/// Synchronous version of ``read(from:primaryKey:)`` for use when the database actor is isolated within calls to ``Blackbird/Database/transaction(_:)`` or ``Blackbird/Database/cancellableTransaction(_:)``.
-	static func readIsolated(from database: Blackbird.Database, core: isolated Blackbird.Database.Core, primaryKey: Sendable) throws -> Self? { try self.readIsolated(from: database, core: core, multicolumnPrimaryKey: [primaryKey]) }
+	/// Synchronous version of ``read(from:primaryKey:)`` for use when the database actor is isolated within calls to ``Ironbird/Database/transaction(_:)`` or ``Ironbird/Database/cancellableTransaction(_:)``.
+	static func readIsolated(from database: Ironbird.Database, core: isolated Ironbird.Database.Core, primaryKey: Sendable) throws -> Self? { try self.readIsolated(from: database, core: core, multicolumnPrimaryKey: [primaryKey]) }
 
 	// SQLite limits the number of "?" arguments in a query. This splits the given values into chunks that fit well below that limit.
-	private static func _queryVariableLimitChunks(for database: Blackbird.Database, _ values: [Sendable]) -> [[Sendable]] {
+	private static func _queryVariableLimitChunks(for database: Ironbird.Database, _ values: [Sendable]) -> [[Sendable]] {
 		let chunkSize = database.maxQueryVariableCount / 2
 		let count = values.count
 
@@ -505,17 +505,17 @@ public extension BlackbirdModel {
 		}
 	}
 
-	private static func _sortWithPrimaryKeyValueSequence(instances: [Self], primaryKeyValues: [Blackbird.Value]) -> [Self] {
-		var primaryKeyValuesToInstances: [Blackbird.Value: Self] = [:]
+	private static func _sortWithPrimaryKeyValueSequence(instances: [Self], primaryKeyValues: [Ironbird.Value]) -> [Self] {
+		var primaryKeyValuesToInstances: [Ironbird.Value: Self] = [:]
 		for instance in instances {
-			primaryKeyValuesToInstances[try! Blackbird.Value.fromAny(instance.primaryKeyValues().first!)] = instance
+			primaryKeyValuesToInstances[try! Ironbird.Value.fromAny(instance.primaryKeyValues().first!)] = instance
 		}
 		return primaryKeyValues.compactMap { primaryKeyValuesToInstances[$0] }
 	}
 
 	/// Reads an array of instances matching the given primary-key values from a database. Only works with single-column primary keys.
 	/// - Parameters:
-	///   - database: The ``Blackbird/Database`` instance to read from.
+	///   - database: The ``Ironbird/Database`` instance to read from.
 	///   - primaryKeys: The values of the primary-key column.
 	///   - preserveOrder: Sort the results to match the order of the `primaryKeys` parameter. Incurs a performance penalty on large collections. Default: `false`.
 	/// - Returns: Any decoded instances in the table matching the given set of primary keys if they exist.
@@ -523,9 +523,9 @@ public extension BlackbirdModel {
 	/// Equivalent to the SQL `IN` clause, e.g.:
 	///
 	/// `SELECT ... WHERE [primary key column] IN (?, ?, ?, ...)`
-	static func read(from database: Blackbird.Database, primaryKeys: [Sendable], preserveOrder: Bool = false) async throws -> [Self] {
+	static func read(from database: Ironbird.Database, primaryKeys: [Sendable], preserveOrder: Bool = false) async throws -> [Self] {
 		let pkName = self.table.primaryKeys.first!.name
-		let primaryKeys = try primaryKeys.map { try Blackbird.Value.fromAny($0) }
+		let primaryKeys = try primaryKeys.map { try Ironbird.Value.fromAny($0) }
 		let cacheResult = _cachedInstances(for: database, primaryKeyValues: primaryKeys)
 		var combinedResults: [Self] = cacheResult.hits
 
@@ -537,10 +537,10 @@ public extension BlackbirdModel {
 		return preserveOrder ? self._sortWithPrimaryKeyValueSequence(instances: combinedResults, primaryKeyValues: primaryKeys) : combinedResults
 	}
 
-	/// Synchronous version of ``read(from:primaryKeys:preserveOrder:)`` for use when the database actor is isolated within calls to ``Blackbird/Database/transaction(_:)`` or ``Blackbird/Database/cancellableTransaction(_:)``.
-	static func readIsolated(from database: Blackbird.Database, core: isolated Blackbird.Database.Core, primaryKeys: [Sendable], preserveOrder: Bool = false) throws -> [Self] {
+	/// Synchronous version of ``read(from:primaryKeys:preserveOrder:)`` for use when the database actor is isolated within calls to ``Ironbird/Database/transaction(_:)`` or ``Ironbird/Database/cancellableTransaction(_:)``.
+	static func readIsolated(from database: Ironbird.Database, core: isolated Ironbird.Database.Core, primaryKeys: [Sendable], preserveOrder: Bool = false) throws -> [Self] {
 		let pkName = self.table.primaryKeys.first!.name
-		let primaryKeys = try primaryKeys.map { try Blackbird.Value.fromAny($0) }
+		let primaryKeys = try primaryKeys.map { try Ironbird.Value.fromAny($0) }
 		let cacheResult = _cachedInstances(for: database, primaryKeyValues: primaryKeys)
 		var combinedResults: [Self] = cacheResult.hits
 
@@ -554,12 +554,12 @@ public extension BlackbirdModel {
 
 	/// Reads a single instance with the given primary key values from a database.
 	/// - Parameters:
-	///   - database: The ``Blackbird/Database`` instance to read from.
+	///   - database: The ``Ironbird/Database`` instance to read from.
 	///   - multicolumnPrimaryKey: An array of values of the primary-key columns. Must match the number and order of primary-key values defined in the model's table.
 	/// - Returns: The decoded instance in the table with the given primary key, or `nil` if a corresponding instance doesn't exist in the table.
 	///
 	/// For tables with single-column primary keys, ``read(from:primaryKey:)`` is more concise.
-	static func read(from database: Blackbird.Database, multicolumnPrimaryKey: [Sendable]) async throws -> Self? {
+	static func read(from database: Ironbird.Database, multicolumnPrimaryKey: [Sendable]) async throws -> Self? {
 		if multicolumnPrimaryKey.count != self.table.primaryKeys.count {
 			fatalError("Incorrect number of primary-key values provided (\(multicolumnPrimaryKey.count), need \(self.table.primaryKeys.count)) for table \(self.tableName)")
 		}
@@ -567,7 +567,7 @@ public extension BlackbirdModel {
 		let sqlWhere = self.table.primaryKeys.map { "`\($0.name)` = ?" }.joined(separator: " AND ")
 
 		if multicolumnPrimaryKey.count == 1 {
-			let pkValue = try Blackbird.Value.fromAny(multicolumnPrimaryKey.first!)
+			let pkValue = try Ironbird.Value.fromAny(multicolumnPrimaryKey.first!)
 			if let cached = _cachedInstance(for: database, primaryKeyValue: pkValue) { return cached }
 			return try await self._readInternal(from: database, query: "SELECT * FROM $T WHERE \(sqlWhere)", arguments: [pkValue]).first
 		}
@@ -575,8 +575,8 @@ public extension BlackbirdModel {
 		return try await self.read(from: database, sqlWhere: sqlWhere, multicolumnPrimaryKey).first
 	}
 
-	/// Synchronous version of ``read(from:multicolumnPrimaryKey:)-926f3`` for use when the database actor is isolated within calls to ``Blackbird/Database/transaction(_:)`` or ``Blackbird/Database/cancellableTransaction(_:)``.
-	static func readIsolated(from database: Blackbird.Database, core: isolated Blackbird.Database.Core, multicolumnPrimaryKey: [Sendable]) throws -> Self? {
+	/// Synchronous version of ``read(from:multicolumnPrimaryKey:)-926f3`` for use when the database actor is isolated within calls to ``Ironbird/Database/transaction(_:)`` or ``Ironbird/Database/cancellableTransaction(_:)``.
+	static func readIsolated(from database: Ironbird.Database, core: isolated Ironbird.Database.Core, multicolumnPrimaryKey: [Sendable]) throws -> Self? {
 		if multicolumnPrimaryKey.count != self.table.primaryKeys.count {
 			fatalError("Incorrect number of primary-key values provided (\(multicolumnPrimaryKey.count), need \(self.table.primaryKeys.count)) for table \(self.tableName)")
 		}
@@ -584,7 +584,7 @@ public extension BlackbirdModel {
 		let sqlWhere = self.table.primaryKeys.map { "`\($0.name)` = ?" }.joined(separator: " AND ")
 
 		if multicolumnPrimaryKey.count == 1 {
-			let pkValue = try Blackbird.Value.fromAny(multicolumnPrimaryKey.first!)
+			let pkValue = try Ironbird.Value.fromAny(multicolumnPrimaryKey.first!)
 			if let cached = _cachedInstance(for: database, primaryKeyValue: pkValue) { return cached }
 			return try self._readInternalIsolated(from: database, core: core, query: "SELECT * FROM $T WHERE \(sqlWhere)", arguments: [pkValue]).first
 		}
@@ -594,12 +594,12 @@ public extension BlackbirdModel {
 
 	/// Reads a single instance with the given primary key values from a database.
 	/// - Parameters:
-	///   - database: The ``Blackbird/Database`` instance to read from.
+	///   - database: The ``Ironbird/Database`` instance to read from.
 	///   - multicolumnPrimaryKey: A dictionary of column names and values of the primary-key columns. Must match the number of primary-key values defined in the model's table.
 	/// - Returns: The decoded instance in the table with the given primary key, or `nil` if a corresponding instance doesn't exist in the table.
 	///
 	/// For tables with single-column primary keys, ``read(from:primaryKey:)`` is more concise.
-	static func read(from database: Blackbird.Database, multicolumnPrimaryKey: [String: Sendable]) async throws -> Self? {
+	static func read(from database: Ironbird.Database, multicolumnPrimaryKey: [String: Sendable]) async throws -> Self? {
 		if multicolumnPrimaryKey.count != self.table.primaryKeys.count {
 			fatalError("Incorrect number of primary-key values provided (\(multicolumnPrimaryKey.count), need \(self.table.primaryKeys.count)) for table \(self.tableName)")
 		}
@@ -614,8 +614,8 @@ public extension BlackbirdModel {
 		return try await self.read(from: database, sqlWhere: andClauses.joined(separator: " AND "), arguments: values).first
 	}
 
-	/// Synchronous version of ``read(from:multicolumnPrimaryKey:)-6pd09`` for use when the database actor is isolated within calls to ``Blackbird/Database/transaction(_:)`` or ``Blackbird/Database/cancellableTransaction(_:)``.
-	static func readIsolated(from database: Blackbird.Database, core: isolated Blackbird.Database.Core, multicolumnPrimaryKey: [String: Sendable]) throws -> Self? {
+	/// Synchronous version of ``read(from:multicolumnPrimaryKey:)-6pd09`` for use when the database actor is isolated within calls to ``Ironbird/Database/transaction(_:)`` or ``Ironbird/Database/cancellableTransaction(_:)``.
+	static func readIsolated(from database: Ironbird.Database, core: isolated Ironbird.Database.Core, multicolumnPrimaryKey: [String: Sendable]) throws -> Self? {
 		if multicolumnPrimaryKey.count != self.table.primaryKeys.count {
 			fatalError("Incorrect number of primary-key values provided (\(multicolumnPrimaryKey.count), need \(self.table.primaryKeys.count)) for table \(self.tableName)")
 		}
@@ -633,7 +633,7 @@ public extension BlackbirdModel {
 	/// Reads instances from a database using an optional list of arguments.
 	///
 	/// - Parameters:
-	///   - database: The ``Blackbird/Database`` instance to read from.
+	///   - database: The ``Ironbird/Database`` instance to read from.
 	///   - sqlWhere: The portion of the desired SQL query after the `WHERE` keyword. May contain placeholders specified as a question mark (`?`).
 	///   - arguments: Values corresponding to any placeholders in the query.
 	/// - Returns: An array of decoded instances matching the query.
@@ -646,14 +646,14 @@ public extension BlackbirdModel {
 	///     arguments: [1 /* state */, "Test Title" /* title *]
 	/// )
 	/// ```
-	static func read(from database: Blackbird.Database, sqlWhere: String, _ arguments: Sendable...) async throws -> [Self] {
+	static func read(from database: Ironbird.Database, sqlWhere: String, _ arguments: Sendable...) async throws -> [Self] {
 		try await self.read(from: database, sqlWhere: sqlWhere, arguments: arguments)
 	}
 
 	/// Reads instances from a database using an array of arguments.
 	///
 	/// - Parameters:
-	///   - database: The ``Blackbird/Database`` instance to read from.
+	///   - database: The ``Ironbird/Database`` instance to read from.
 	///   - sqlWhere: The portion of the desired SQL query after the `WHERE` keyword. May contain placeholders specified as a question mark (`?`).
 	///   - arguments: An array of values corresponding to any placeholders in the query.
 	/// - Returns: An array of decoded instances matching the query.
@@ -666,28 +666,28 @@ public extension BlackbirdModel {
 	///     arguments: [1 /* state */, "Test Title" /* title *]
 	/// )
 	/// ```
-	static func read(from database: Blackbird.Database, sqlWhere: String, arguments: [Sendable]) async throws -> [Self] {
-		let arguments = try arguments.map { try Blackbird.Value.fromAny($0) }
+	static func read(from database: Ironbird.Database, sqlWhere: String, arguments: [Sendable]) async throws -> [Self] {
+		let arguments = try arguments.map { try Ironbird.Value.fromAny($0) }
 		let query = "SELECT * FROM $T WHERE \(sqlWhere)"
 		return try await self._cacheableResult(database: database, tableName: self.tableName, query: query, arguments: arguments) {
 			try await self._readInternal(from: $0, query: query, arguments: arguments)
 		}
 	}
 
-	internal static func _readInternal(from database: Blackbird.Database, query: String, arguments: [Sendable]) async throws -> [Self] {
-		let arguments = try arguments.map { try Blackbird.Value.fromAny($0) }
+	internal static func _readInternal(from database: Ironbird.Database, query: String, arguments: [Sendable]) async throws -> [Self] {
+		let arguments = try arguments.map { try Ironbird.Value.fromAny($0) }
 		return try await self._queryInternal(in: database, query, arguments: arguments).map {
-			let decoder = BlackbirdSQLiteDecoder(database: database, row: $0.row)
+			let decoder = IronbirdSQLiteDecoder(database: database, row: $0.row)
 			let instance = try Self(from: decoder)
 			instance._saveCachedInstance(for: database)
 			return instance
 		}
 	}
 
-	internal static func _readInternalIsolated(from database: Blackbird.Database, core: isolated Blackbird.Database.Core, query: String, arguments: [Sendable]) throws -> [Self] {
-		let arguments = try arguments.map { try Blackbird.Value.fromAny($0) }
+	internal static func _readInternalIsolated(from database: Ironbird.Database, core: isolated Ironbird.Database.Core, query: String, arguments: [Sendable]) throws -> [Self] {
+		let arguments = try arguments.map { try Ironbird.Value.fromAny($0) }
 		return try self._queryInternalIsolated(in: database, core: core, query, arguments: arguments).map {
-			let decoder = BlackbirdSQLiteDecoder(database: database, row: $0.row)
+			let decoder = IronbirdSQLiteDecoder(database: database, row: $0.row)
 			let instance = try Self(from: decoder)
 			instance._saveCachedInstance(for: database)
 			return instance
@@ -697,7 +697,7 @@ public extension BlackbirdModel {
 	/// Reads instances from a database using a dictionary of named arguments.
 	///
 	/// - Parameters:
-	///   - database: The ``Blackbird/Database`` instance to read from.
+	///   - database: The ``Ironbird/Database`` instance to read from.
 	///   - sqlWhere: The portion of the desired SQL query after the `WHERE` keyword. May contain named placeholders prefixed by a colon (`:`), at-sign (`@`), or dollar sign (`$`) as described in the [SQLite documentation](https://www.sqlite.org/c3ref/bind_blob.html).
 	///   - arguments: A dictionary of placeholder names used in the query and their corresponding values. Names must include the prefix character used.
 	/// - Returns: An array of decoded instances matching the query.
@@ -710,27 +710,27 @@ public extension BlackbirdModel {
 	///     arguments: [":state": 1, ":title": "Test Title"]
 	/// )
 	/// ```
-	static func read(from database: Blackbird.Database, sqlWhere: String, arguments: [String: Sendable]) async throws -> [Self] {
+	static func read(from database: Ironbird.Database, sqlWhere: String, arguments: [String: Sendable]) async throws -> [Self] {
 		try await self.query(in: database, "SELECT * FROM $T WHERE \(sqlWhere)", arguments: arguments).map {
-			let decoder = BlackbirdSQLiteDecoder(database: database, row: $0.row)
+			let decoder = IronbirdSQLiteDecoder(database: database, row: $0.row)
 			let instance = try Self(from: decoder)
 			instance._saveCachedInstance(for: database)
 			return instance
 		}
 	}
 
-	/// Synchronous version of ``read(from:sqlWhere:_:)`` for use when the database actor is isolated within calls to ``Blackbird/Database/transaction(_:)`` or ``Blackbird/Database/cancellableTransaction(_:)``.
-	static func readIsolated(from database: Blackbird.Database, core: isolated Blackbird.Database.Core, sqlWhere: String, _ arguments: Sendable...) throws -> [Self] {
+	/// Synchronous version of ``read(from:sqlWhere:_:)`` for use when the database actor is isolated within calls to ``Ironbird/Database/transaction(_:)`` or ``Ironbird/Database/cancellableTransaction(_:)``.
+	static func readIsolated(from database: Ironbird.Database, core: isolated Ironbird.Database.Core, sqlWhere: String, _ arguments: Sendable...) throws -> [Self] {
 		try self.readIsolated(from: database, core: core, sqlWhere: sqlWhere, arguments: arguments)
 	}
 
-	/// Synchronous version of ``read(from:sqlWhere:arguments:)-1cd9m`` for use when the database actor is isolated within calls to ``Blackbird/Database/transaction(_:)`` or ``Blackbird/Database/cancellableTransaction(_:)``.
-	static func readIsolated(from database: Blackbird.Database, core: isolated Blackbird.Database.Core, sqlWhere: String, arguments: [Sendable]) throws -> [Self] {
+	/// Synchronous version of ``read(from:sqlWhere:arguments:)-1cd9m`` for use when the database actor is isolated within calls to ``Ironbird/Database/transaction(_:)`` or ``Ironbird/Database/cancellableTransaction(_:)``.
+	static func readIsolated(from database: Ironbird.Database, core: isolated Ironbird.Database.Core, sqlWhere: String, arguments: [Sendable]) throws -> [Self] {
 		let query = "SELECT * FROM $T WHERE \(sqlWhere)"
-		let arguments = try arguments.map { try Blackbird.Value.fromAny($0) }
+		let arguments = try arguments.map { try Ironbird.Value.fromAny($0) }
 		return try self._cacheableResultIsolated(database: database, core: core, tableName: self.tableName, query: query, arguments: arguments) {
 			try self._queryInternalIsolated(in: $0, core: $1, query, arguments: arguments).map {
-				let decoder = BlackbirdSQLiteDecoder(database: database, row: $0.row)
+				let decoder = IronbirdSQLiteDecoder(database: database, row: $0.row)
 				let instance = try Self(from: decoder)
 				instance._saveCachedInstance(for: database)
 				return instance
@@ -738,10 +738,10 @@ public extension BlackbirdModel {
 		}
 	}
 
-	/// Synchronous version of ``read(from:sqlWhere:arguments:)-5y16m`` for use when the database actor is isolated within calls to ``Blackbird/Database/transaction(_:)`` or ``Blackbird/Database/cancellableTransaction(_:)``.
-	static func readIsolated(from database: Blackbird.Database, core: isolated Blackbird.Database.Core, sqlWhere: String, arguments: [String: Sendable]) throws -> [Self] {
+	/// Synchronous version of ``read(from:sqlWhere:arguments:)-5y16m`` for use when the database actor is isolated within calls to ``Ironbird/Database/transaction(_:)`` or ``Ironbird/Database/cancellableTransaction(_:)``.
+	static func readIsolated(from database: Ironbird.Database, core: isolated Ironbird.Database.Core, sqlWhere: String, arguments: [String: Sendable]) throws -> [Self] {
 		try self.queryIsolated(in: database, core: core, "SELECT * FROM $T WHERE \(sqlWhere)", arguments: arguments).map {
-			let decoder = BlackbirdSQLiteDecoder(database: database, row: $0.row)
+			let decoder = IronbirdSQLiteDecoder(database: database, row: $0.row)
 			let instance = try Self(from: decoder)
 			instance._saveCachedInstance(for: database)
 			return instance
@@ -750,99 +750,99 @@ public extension BlackbirdModel {
 
 	/// Executes arbitrary SQL with a placeholder available for this type's table name.
 	/// - Parameters:
-	///   - database: The ``Blackbird/Database`` instance to query.
+	///   - database: The ``Ironbird/Database`` instance to query.
 	///   - query: The SQL statement to execute, optionally containing:
 	///       - A `$T` placeholder which will be replaced with this type's table name.
 	///       - Question-mark placeholders (`?`) for any argument values to be passed to the query.
 	///   - arguments: Values corresponding to any placeholders in the query.
 	/// - Returns: An array of rows matching the query if applicable, or an empty array otherwise.
 	@discardableResult
-	static func query(in database: Blackbird.Database, _ query: String, _ arguments: Sendable...) async throws -> [Blackbird.ModelRow<Self>] {
+	static func query(in database: Ironbird.Database, _ query: String, _ arguments: Sendable...) async throws -> [Ironbird.ModelRow<Self>] {
 		try await self.query(in: database, query, arguments: arguments)
 	}
 
 	/// Executes arbitrary SQL with a placeholder available for this type's table name.
 	/// - Parameters:
-	///   - database: The ``Blackbird/Database`` instance to query.
+	///   - database: The ``Ironbird/Database`` instance to query.
 	///   - query: The SQL statement to execute, optionally containing:
 	///       - A `$T` placeholder which will be replaced with this type's table name.
 	///       - Question-mark placeholders (`?`) for any argument values to be passed to the query.
 	///   - arguments: An array of values corresponding to any placeholders in the query.
 	/// - Returns: An array of rows matching the query if applicable, or an empty array otherwise.
 	@discardableResult
-	static func query(in database: Blackbird.Database, _ query: String, arguments: [Sendable]) async throws -> [Blackbird.ModelRow<Self>] {
-		let arguments = try arguments.map { try Blackbird.Value.fromAny($0) }
+	static func query(in database: Ironbird.Database, _ query: String, arguments: [Sendable]) async throws -> [Ironbird.ModelRow<Self>] {
+		let arguments = try arguments.map { try Ironbird.Value.fromAny($0) }
 		return try await self._cacheableResult(database: database, tableName: Self.tableName, query: query, arguments: arguments) {
 			try await self._queryInternal(in: $0, query, arguments: arguments)
 		}
 	}
 
-	internal static func _queryInternal(in database: Blackbird.Database, _ query: String, arguments: [Sendable]) async throws -> [Blackbird.ModelRow<Self>] {
+	internal static func _queryInternal(in database: Ironbird.Database, _ query: String, arguments: [Sendable]) async throws -> [Ironbird.ModelRow<Self>] {
 		let table = Self.table
 		try await table.resolveWithDatabase(type: Self.self, database: database, core: database.core) { try self.validateSchema(database: $0, core: $1) }
-		return try await database.core.query(query.replacingOccurrences(of: "$T", with: table.name), arguments: arguments).map { Blackbird.ModelRow<Self>($0, table: table) }
+		return try await database.core.query(query.replacingOccurrences(of: "$T", with: table.name), arguments: arguments).map { Ironbird.ModelRow<Self>($0, table: table) }
 	}
 
 	/// Executes arbitrary SQL with a placeholder available for this type's table name.
 	/// - Parameters:
-	///   - database: The ``Blackbird/Database`` instance to query.
+	///   - database: The ``Ironbird/Database`` instance to query.
 	///   - query: The SQL statement to execute, optionally containing:
 	///       - A `$T` placeholder which will be replaced with this type's table name.
 	///       - Named placeholders prefixed by a colon (`:`), at-sign (`@`), or dollar sign (`$`) as described in the [SQLite documentation](https://www.sqlite.org/c3ref/bind_blob.html).
 	///   - arguments: A dictionary of placeholder names used in the query and their corresponding values. Names must include the prefix character used.
 	/// - Returns: An array of rows matching the query if applicable, or an empty array otherwise.
 	@discardableResult
-	static func query(in database: Blackbird.Database, _ query: String, arguments: [String: Sendable]) async throws -> [Blackbird.ModelRow<Self>] {
+	static func query(in database: Ironbird.Database, _ query: String, arguments: [String: Sendable]) async throws -> [Ironbird.ModelRow<Self>] {
 		let table = Self.table
 		try await table.resolveWithDatabase(type: Self.self, database: database, core: database.core) { try self.validateSchema(database: $0, core: $1) }
-		return try await database.core.query(query.replacingOccurrences(of: "$T", with: table.name), arguments: arguments).map { Blackbird.ModelRow<Self>($0, table: table) }
+		return try await database.core.query(query.replacingOccurrences(of: "$T", with: table.name), arguments: arguments).map { Ironbird.ModelRow<Self>($0, table: table) }
 	}
 
-	/// Synchronous version of ``query(in:_:_:)`` for use when the database actor is isolated within calls to ``Blackbird/Database/transaction(_:)`` or ``Blackbird/Database/cancellableTransaction(_:)``.
+	/// Synchronous version of ``query(in:_:_:)`` for use when the database actor is isolated within calls to ``Ironbird/Database/transaction(_:)`` or ``Ironbird/Database/cancellableTransaction(_:)``.
 	@discardableResult
-	static func queryIsolated(in database: Blackbird.Database, core: isolated Blackbird.Database.Core, _ query: String, _ arguments: Sendable...) throws -> [Blackbird.ModelRow<Self>] {
+	static func queryIsolated(in database: Ironbird.Database, core: isolated Ironbird.Database.Core, _ query: String, _ arguments: Sendable...) throws -> [Ironbird.ModelRow<Self>] {
 		try self.queryIsolated(in: database, core: core, query, arguments: arguments)
 	}
 
-	/// Synchronous version of ``query(in:_:arguments:)-1bv0o`` for use when the database actor is isolated within calls to ``Blackbird/Database/transaction(_:)`` or ``Blackbird/Database/cancellableTransaction(_:)``.
+	/// Synchronous version of ``query(in:_:arguments:)-1bv0o`` for use when the database actor is isolated within calls to ``Ironbird/Database/transaction(_:)`` or ``Ironbird/Database/cancellableTransaction(_:)``.
 	@discardableResult
-	static func queryIsolated(in database: Blackbird.Database, core: isolated Blackbird.Database.Core, _ query: String, arguments: [Sendable]) throws -> [Blackbird.ModelRow<Self>] {
-		let arguments = try arguments.map { try Blackbird.Value.fromAny($0) }
+	static func queryIsolated(in database: Ironbird.Database, core: isolated Ironbird.Database.Core, _ query: String, arguments: [Sendable]) throws -> [Ironbird.ModelRow<Self>] {
+		let arguments = try arguments.map { try Ironbird.Value.fromAny($0) }
 		return try self._cacheableResultIsolated(database: database, core: core, tableName: self.tableName, query: query, arguments: arguments) {
 			try self._queryInternalIsolated(in: $0, core: $1, query, arguments: arguments)
 		}
 	}
 
-	internal static func _queryInternalIsolated(in database: Blackbird.Database, core: isolated Blackbird.Database.Core, _ query: String, arguments: [Sendable]) throws -> [Blackbird.ModelRow<Self>] {
+	internal static func _queryInternalIsolated(in database: Ironbird.Database, core: isolated Ironbird.Database.Core, _ query: String, arguments: [Sendable]) throws -> [Ironbird.ModelRow<Self>] {
 		let table = Self.table
 		try table.resolveWithDatabaseIsolated(type: Self.self, database: database, core: core) { try Self.validateSchema(database: $0, core: $1) }
-		return try core.query(query.replacingOccurrences(of: "$T", with: table.name), arguments: arguments).map { Blackbird.ModelRow<Self>($0, table: table) }
+		return try core.query(query.replacingOccurrences(of: "$T", with: table.name), arguments: arguments).map { Ironbird.ModelRow<Self>($0, table: table) }
 	}
 
-	/// Synchronous version of ``query(in:_:arguments:)-3dwoy`` for use when the database actor is isolated within calls to ``Blackbird/Database/transaction(_:)`` or ``Blackbird/Database/cancellableTransaction(_:)``.
+	/// Synchronous version of ``query(in:_:arguments:)-3dwoy`` for use when the database actor is isolated within calls to ``Ironbird/Database/transaction(_:)`` or ``Ironbird/Database/cancellableTransaction(_:)``.
 	@discardableResult
-	static func queryIsolated(in database: Blackbird.Database, core: isolated Blackbird.Database.Core, _ query: String, arguments: [String: Sendable]) throws -> [Blackbird.ModelRow<Self>] {
+	static func queryIsolated(in database: Ironbird.Database, core: isolated Ironbird.Database.Core, _ query: String, arguments: [String: Sendable]) throws -> [Ironbird.ModelRow<Self>] {
 		let table = Self.table
 		try table.resolveWithDatabaseIsolated(type: Self.self, database: database, core: core) { try self.validateSchema(database: $0, core: $1) }
-		return try core.query(query.replacingOccurrences(of: "$T", with: table.name), arguments: arguments).map { Blackbird.ModelRow<Self>($0, table: table) }
+		return try core.query(query.replacingOccurrences(of: "$T", with: table.name), arguments: arguments).map { Ironbird.ModelRow<Self>($0, table: table) }
 	}
 
-	internal static func validateSchema(database: Blackbird.Database, core: isolated Blackbird.Database.Core) throws {
-		var nonNullEnumColumnsToRawValues: [Blackbird.Column: Set<Blackbird.Value>] = [:]
-		var nonNullURLColumns: [Blackbird.Column] = []
+	internal static func validateSchema(database: Ironbird.Database, core: isolated Ironbird.Database.Core) throws {
+		var nonNullEnumColumnsToRawValues: [Ironbird.Column: Set<Ironbird.Value>] = [:]
+		var nonNullURLColumns: [Ironbird.Column] = []
 		let table = table
 
-		var testRow = Blackbird.Row()
+		var testRow = Ironbird.Row()
 		for column in table.columns {
-			let defaultValue: Blackbird.Value
+			let defaultValue: Ironbird.Value
 			if column.mayBeNull {
 				defaultValue = .null
-			} else if let enumType = column.valueType as? any BlackbirdStringEnum.Type {
-				nonNullEnumColumnsToRawValues[column] = Set(try enumType.allCases.map { try Blackbird.Value.fromAny($0) })
-				defaultValue = try Blackbird.Value.fromAny(enumType.defaultPlaceholderValue())
-			} else if let enumType = column.valueType.self as? any BlackbirdIntegerEnum.Type {
-				nonNullEnumColumnsToRawValues[column] = Set(try enumType.allCases.map { try Blackbird.Value.fromAny($0) })
-				defaultValue = try Blackbird.Value.fromAny(enumType.defaultPlaceholderValue())
+			} else if let enumType = column.valueType as? any IronbirdStringEnum.Type {
+				nonNullEnumColumnsToRawValues[column] = Set(try enumType.allCases.map { try Ironbird.Value.fromAny($0) })
+				defaultValue = try Ironbird.Value.fromAny(enumType.defaultPlaceholderValue())
+			} else if let enumType = column.valueType.self as? any IronbirdIntegerEnum.Type {
+				nonNullEnumColumnsToRawValues[column] = Set(try enumType.allCases.map { try Ironbird.Value.fromAny($0) })
+				defaultValue = try Ironbird.Value.fromAny(enumType.defaultPlaceholderValue())
 			} else if column.valueType is URL.Type {
 				nonNullURLColumns.append(column)
 				defaultValue = "https://github.com/"
@@ -853,12 +853,12 @@ public extension BlackbirdModel {
 		}
 
 		// Test decoding with defaults
-		let decoder = BlackbirdSQLiteDecoder(database: database, row: testRow)
+		let decoder = IronbirdSQLiteDecoder(database: database, row: testRow)
 		do {
 			_ = try Self(from: decoder)
 		} catch {
 			fatalError("Table \"\(table.name)\" definition defaults do not decode to model \(String(describing: self)): \(error).\n\n" +
-				"If \(table.name) defines custom CodingKeys, it must be declared as:\n\n    enum CodingKeys: String, BlackbirdCodingKey {...}\n")
+				"If \(table.name) defines custom CodingKeys, it must be declared as:\n\n    enum CodingKeys: String, IronbirdCodingKey {...}\n")
 		}
 
 		// Check validity of data already in the database for special column types (non-optional URLs, enums)
@@ -879,7 +879,7 @@ public extension BlackbirdModel {
 					guard let urlStr = row[urlColumn.name]!.stringValue else {
 						switch self.invalidRowDataMigrationResolution {
 							case .throwError:
-								throw BlackbirdTableError.impossibleMigration(type: Self.self, description: "URL column \"\(urlColumn.name)\" contains a non-string value in existing database row")
+								throw IronbirdTableError.impossibleMigration(type: Self.self, description: "URL column \"\(urlColumn.name)\" contains a non-string value in existing database row")
 
 							case .deleteData:
 								try core.query("DELETE FROM `\(table.name)` WHERE _rowid_ = ?", row["_rowid_"]!)
@@ -890,7 +890,7 @@ public extension BlackbirdModel {
 					guard let _ = URL(string: urlStr) else {
 						switch self.invalidRowDataMigrationResolution {
 							case .throwError:
-								throw BlackbirdTableError.impossibleMigration(type: Self.self, description: "URL column \"\(urlColumn.name)\" contains invalid value (\"\(urlStr)\") in existing database row")
+								throw IronbirdTableError.impossibleMigration(type: Self.self, description: "URL column \"\(urlColumn.name)\" contains invalid value (\"\(urlStr)\") in existing database row")
 
 							case .deleteData:
 								try core.query("DELETE FROM `\(table.name)` WHERE _rowid_ = ?", row["_rowid_"]!)
@@ -913,7 +913,7 @@ public extension BlackbirdModel {
 					switch self.invalidRowDataMigrationResolution {
 						case .throwError:
 							let value = row[enumColumn.name]!
-							throw BlackbirdTableError.impossibleMigration(type: Self.self, description: "Enum column \"\(enumColumn.name)\" contains invalid value (\(value.sqliteLiteral())) in existing database row")
+							throw IronbirdTableError.impossibleMigration(type: Self.self, description: "Enum column \"\(enumColumn.name)\" contains invalid value (\(value.sqliteLiteral())) in existing database row")
 
 						case .deleteData:
 							try core.query("DELETE FROM `\(table.name)` WHERE _rowid_ = ?", row["_rowid_"]!)
@@ -933,10 +933,10 @@ public extension BlackbirdModel {
 	/// If the database migration fails, an error will be thrown.
 	///
 	/// - Parameters:
-	///   - database: The ``Blackbird/Database`` instance to resolve the schema in.
+	///   - database: The ``Ironbird/Database`` instance to resolve the schema in.
 
 	@discardableResult
-	static func resolveSchema(in database: Blackbird.Database) async throws -> BlackbirdModelSchemaResolution {
+	static func resolveSchema(in database: Ironbird.Database) async throws -> IronbirdModelSchemaResolution {
 		try await self.table.resolveWithDatabase(type: Self.self, database: database, core: database.core, isExplicitResolve: true) { try self.validateSchema(database: $0, core: $1) }
 	}
 
@@ -952,16 +952,16 @@ public extension BlackbirdModel {
 		return Self.primaryKey.map { (self[keyPath: $0] as! any ColumnWrapper).value }
 	}
 
-	private func enumerateColumnValues(_ action: ((_ column: any ColumnWrapper, _ name: String, _ value: Blackbird.Value) -> Void)) throws {
+	private func enumerateColumnValues(_ action: ((_ column: any ColumnWrapper, _ name: String, _ value: Ironbird.Value) -> Void)) throws {
 		for (label, child) in Mirror(reflecting: self).children {
 			guard var label, let column = child as? any ColumnWrapper else { continue }
 			label = label.removingLeadingUnderscore()
 
-			let value: Blackbird.Value
+			let value: Ironbird.Value
 			if let optional = column.value as? OptionalProtocol {
-				value = try Blackbird.Value.fromAny(optional.wrappedOptionalValue)
+				value = try Ironbird.Value.fromAny(optional.wrappedOptionalValue)
 			} else {
-				value = try Blackbird.Value.fromAny(column.value)
+				value = try Ironbird.Value.fromAny(column.value)
 			}
 
 			action(column, label, value)
@@ -969,28 +969,28 @@ public extension BlackbirdModel {
 	}
 
 	/// Write this instance to a database.
-	/// - Parameter database: The ``Blackbird/Database`` instance to write to.
-	func write(to database: Blackbird.Database) async throws {
+	/// - Parameter database: The ``Ironbird/Database`` instance to write to.
+	func write(to database: Ironbird.Database) async throws {
 		try await self.writeIsolated(to: database, core: database.core)
 	}
 
 	/// Write this instance to a database synchronously from an actor-isolated transaction.
 	/// - Parameters:
-	///   - database: The ``Blackbird/Database`` instance to write to.
-	///   - core: The isolated ``Blackbird/Database/Core`` provided to the transaction.
+	///   - database: The ``Ironbird/Database`` instance to write to.
+	///   - core: The isolated ``Ironbird/Database/Core`` provided to the transaction.
 	///
-	/// For use only when the database actor is isolated within calls to ``Blackbird/Database/transaction(_:)`` or ``Blackbird/Database/cancellableTransaction(_:)``.
-	func writeIsolated(to database: Blackbird.Database, core: isolated Blackbird.Database.Core) throws {
+	/// For use only when the database actor is isolated within calls to ``Ironbird/Database/transaction(_:)`` or ``Ironbird/Database/cancellableTransaction(_:)``.
+	func writeIsolated(to database: Ironbird.Database, core: isolated Ironbird.Database.Core) throws {
 		let table = Self.table
-		if database.options.contains(.readOnly) { fatalError("Cannot write BlackbirdModel to a read-only database") }
+		if database.options.contains(.readOnly) { fatalError("Cannot write IronbirdModel to a read-only database") }
 		_ = try table.resolveWithDatabaseIsolated(type: Self.self, database: database, core: core) { try Self.validateSchema(database: $0, core: $1) }
 
 		var columnNames: [String] = []
 		var placeholders: [String] = []
-		var values: [Blackbird.Value] = []
-		var valuesByColumnName: [String: Blackbird.Value] = [:]
+		var values: [Ironbird.Value] = []
+		var valuesByColumnName: [String: Ironbird.Value] = [:]
 
-		var changedColumnNames = Blackbird.ColumnNames()
+		var changedColumnNames = Ironbird.ColumnNames()
 		var changedColumns: [any ColumnWrapper] = []
 
 		try self.enumerateColumnValues { column, name, value in
@@ -1028,23 +1028,23 @@ public extension BlackbirdModel {
 	}
 
 	/// Delete this instance from a database.
-	/// - Parameter database: The ``Blackbird/Database`` instance to delete from.
-	func delete(from database: Blackbird.Database) async throws {
+	/// - Parameter database: The ``Ironbird/Database`` instance to delete from.
+	func delete(from database: Ironbird.Database) async throws {
 		try await self.deleteIsolated(from: database, core: database.core)
 	}
 
 	/// Delete this instance from a database synchronously from an actor-isolated transaction.
 	/// - Parameters:
-	///   - database: The ``Blackbird/Database`` instance to delete from.
-	///   - core: The isolated ``Blackbird/Database/Core`` provided to the transaction.
+	///   - database: The ``Ironbird/Database`` instance to delete from.
+	///   - core: The isolated ``Ironbird/Database/Core`` provided to the transaction.
 	///
-	/// For use only when the database actor is isolated within calls to ``Blackbird/Database/transaction(_:)`` or ``Blackbird/Database/cancellableTransaction(_:)``.
-	func deleteIsolated(from database: Blackbird.Database, core: isolated Blackbird.Database.Core) throws {
-		if database.options.contains(.readOnly) { fatalError("Cannot delete BlackbirdModel from a read-only database") }
+	/// For use only when the database actor is isolated within calls to ``Ironbird/Database/transaction(_:)`` or ``Ironbird/Database/cancellableTransaction(_:)``.
+	func deleteIsolated(from database: Ironbird.Database, core: isolated Ironbird.Database.Core) throws {
+		if database.options.contains(.readOnly) { fatalError("Cannot delete IronbirdModel from a read-only database") }
 		let table = Self.table
 		try table.resolveWithDatabaseIsolated(type: Self.self, database: database, core: core) { try Self.validateSchema(database: $0, core: $1) }
 
-		let values = try self.primaryKeyValues().map { try Blackbird.Value.fromAny($0) }
+		let values = try self.primaryKeyValues().map { try Ironbird.Value.fromAny($0) }
 		let andClauses: [String] = table.primaryKeys.map { "`\($0.name)` = ?" }
 
 		database.changeReporter.ignoreWritesToTable(Self.tableName)
@@ -1057,10 +1057,10 @@ public extension BlackbirdModel {
 		self._deleteCachedInstance(for: database)
 	}
 
-	fileprivate static func _cacheableResult<T: Sendable>(database: Blackbird.Database, tableName: String, query: String, arguments: [Blackbird.Value], resultFetcher: ((Blackbird.Database) async throws -> T)) async throws -> T {
+	fileprivate static func _cacheableResult<T: Sendable>(database: Ironbird.Database, tableName: String, query: String, arguments: [Ironbird.Value], resultFetcher: ((Ironbird.Database) async throws -> T)) async throws -> T {
 		let cacheLimit = Self.cacheLimit
 		guard cacheLimit > 0 else { return try await resultFetcher(database) }
-		var cacheKey: [Blackbird.Value] = [.text(query)]
+		var cacheKey: [Ironbird.Value] = [.text(query)]
 		cacheKey.append(contentsOf: arguments)
 
 		if case .hit(let value) = database.cache.readQueryResult(tableName: tableName, cacheKey: cacheKey), let cachedResult = value as? T { return cachedResult }
@@ -1070,10 +1070,10 @@ public extension BlackbirdModel {
 		return result
 	}
 
-	fileprivate static func _cacheableResultIsolated<T: Sendable>(database: Blackbird.Database, core: isolated Blackbird.Database.Core, tableName: String, query: String, arguments: [Blackbird.Value], resultFetcher: ((Blackbird.Database, isolated Blackbird.Database.Core) throws -> T)) throws -> T {
+	fileprivate static func _cacheableResultIsolated<T: Sendable>(database: Ironbird.Database, core: isolated Ironbird.Database.Core, tableName: String, query: String, arguments: [Ironbird.Value], resultFetcher: ((Ironbird.Database, isolated Ironbird.Database.Core) throws -> T)) throws -> T {
 		let cacheLimit = Self.cacheLimit
 		guard cacheLimit > 0 else { return try resultFetcher(database, core) }
-		var cacheKey: [Blackbird.Value] = [.text(query)]
+		var cacheKey: [Ironbird.Value] = [.text(query)]
 		cacheKey.append(contentsOf: arguments)
 
 		if case .hit(let value) = database.cache.readQueryResult(tableName: tableName, cacheKey: cacheKey), let cachedResult = value as? T { return cachedResult }

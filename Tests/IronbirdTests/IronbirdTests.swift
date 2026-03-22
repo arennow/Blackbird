@@ -31,13 +31,13 @@
 //  SOFTWARE.
 //
 
-@testable import Blackbird
 import Foundation
+@testable import Ironbird
 import Loggable
 import Semaphore
 import Testing
 
-final class BlackbirdTests: IBLoggable {
+final class IronbirdTests: IBLoggable {
 	var sqliteFilename = ""
 
 	init() throws {
@@ -47,7 +47,7 @@ final class BlackbirdTests: IBLoggable {
 
 	deinit {
 		if sqliteFilename != "", sqliteFilename != ":memory:", FileManager.default.fileExists(atPath: sqliteFilename) {
-			for path in Blackbird.Database.allFilePaths(for: sqliteFilename) {
+			for path in Ironbird.Database.allFilePaths(for: sqliteFilename) {
 				try? FileManager.default.removeItem(atPath: path)
 			}
 		}
@@ -55,71 +55,71 @@ final class BlackbirdTests: IBLoggable {
 
 	@Test
 	func valueConversions() throws {
-		let n = try #require(Blackbird.Value.fromSQLiteLiteral("NULL"))
+		let n = try #require(Ironbird.Value.fromSQLiteLiteral("NULL"))
 		#expect(n == .null)
 		#expect(n.intValue == nil)
 		#expect(n.doubleValue == nil)
 		#expect(n.stringValue == nil)
 		#expect(n.dataValue == nil)
-		#expect((try Blackbird.Value.fromAny(nil)) == n)
-		#expect((try Blackbird.Value.fromAny(NSNull())) == n)
+		#expect((try Ironbird.Value.fromAny(nil)) == n)
+		#expect((try Ironbird.Value.fromAny(NSNull())) == n)
 
-		let i = try #require(Blackbird.Value.fromSQLiteLiteral("123456"))
+		let i = try #require(Ironbird.Value.fromSQLiteLiteral("123456"))
 		#expect(i == .integer(123_456))
 		#expect(i.intValue == 123_456)
 		#expect(i.doubleValue == 123_456.0)
 		#expect(i.stringValue == "123456")
 		#expect(i.dataValue == "123456".data(using: .utf8))
-		#expect((try Blackbird.Value.fromAny(123_456)) == i)
-		#expect((try Blackbird.Value.fromAny(Int(123_456))) == i)
-		#expect((try Blackbird.Value.fromAny(Int8(123))) == .integer(123))
-		#expect((try Blackbird.Value.fromAny(Int16(12_345))) == .integer(12_345))
-		#expect((try Blackbird.Value.fromAny(Int32(123_456))) == i)
-		#expect((try Blackbird.Value.fromAny(Int64(123_456))) == i)
-		#expect((try Blackbird.Value.fromAny(UInt8(123))) == .integer(123))
-		#expect((try Blackbird.Value.fromAny(UInt16(12_345))) == .integer(12_345))
-		#expect((try Blackbird.Value.fromAny(UInt32(123_456))) == i)
-		#expect(throws: (any Swift.Error).self) { _ = try Blackbird.Value.fromAny(UInt(123_456)) }
-		#expect(throws: (any Swift.Error).self) { _ = try Blackbird.Value.fromAny(UInt64(123_456)) }
-		#expect((try Blackbird.Value.fromAny(false)) == .integer(0))
-		#expect((try Blackbird.Value.fromAny(true)) == .integer(1))
+		#expect((try Ironbird.Value.fromAny(123_456)) == i)
+		#expect((try Ironbird.Value.fromAny(Int(123_456))) == i)
+		#expect((try Ironbird.Value.fromAny(Int8(123))) == .integer(123))
+		#expect((try Ironbird.Value.fromAny(Int16(12_345))) == .integer(12_345))
+		#expect((try Ironbird.Value.fromAny(Int32(123_456))) == i)
+		#expect((try Ironbird.Value.fromAny(Int64(123_456))) == i)
+		#expect((try Ironbird.Value.fromAny(UInt8(123))) == .integer(123))
+		#expect((try Ironbird.Value.fromAny(UInt16(12_345))) == .integer(12_345))
+		#expect((try Ironbird.Value.fromAny(UInt32(123_456))) == i)
+		#expect(throws: (any Swift.Error).self) { _ = try Ironbird.Value.fromAny(UInt(123_456)) }
+		#expect(throws: (any Swift.Error).self) { _ = try Ironbird.Value.fromAny(UInt64(123_456)) }
+		#expect((try Ironbird.Value.fromAny(false)) == .integer(0))
+		#expect((try Ironbird.Value.fromAny(true)) == .integer(1))
 
-		let d = try #require(Blackbird.Value.fromSQLiteLiteral("123456.789"))
+		let d = try #require(Ironbird.Value.fromSQLiteLiteral("123456.789"))
 		#expect(d == .double(123_456.789))
 		#expect(d.intValue == 123_456)
 		#expect(d.doubleValue == 123_456.789)
 		#expect(d.stringValue == "123456.789")
 		#expect(d.dataValue == "123456.789".data(using: .utf8))
-		#expect((try Blackbird.Value.fromAny(123_456.789)) == d)
-		#expect((try Blackbird.Value.fromAny(Float(123_456.789))) == .double(123_456.7890625))
-		#expect((try Blackbird.Value.fromAny(Double(123_456.789))) == d)
+		#expect((try Ironbird.Value.fromAny(123_456.789)) == d)
+		#expect((try Ironbird.Value.fromAny(Float(123_456.789))) == .double(123_456.7890625))
+		#expect((try Ironbird.Value.fromAny(Double(123_456.789))) == d)
 
-		let s = try #require(Blackbird.Value.fromSQLiteLiteral("'abc\"🌊\"d''éƒ'''"))
+		let s = try #require(Ironbird.Value.fromSQLiteLiteral("'abc\"🌊\"d''éƒ'''"))
 		#expect(s == .text("abc\"🌊\"d'éƒ'"))
 		#expect(s.intValue == nil)
 		#expect(s.doubleValue == nil)
 		#expect(s.stringValue == "abc\"🌊\"d'éƒ'")
 		#expect(s.dataValue == "abc\"🌊\"d'éƒ'".data(using: .utf8))
-		#expect((try Blackbird.Value.fromAny("abc\"🌊\"d'éƒ'")) == s)
+		#expect((try Ironbird.Value.fromAny("abc\"🌊\"d'éƒ'")) == s)
 
-		let b = try #require(Blackbird.Value.fromSQLiteLiteral("X\'616263F09F8C8A64C3A9C692\'"))
+		let b = try #require(Ironbird.Value.fromSQLiteLiteral("X\'616263F09F8C8A64C3A9C692\'"))
 		#expect(b == .data(try #require("abc🌊déƒ".data(using: .utf8))))
 		#expect(b.intValue == nil)
 		#expect(b.doubleValue == nil)
 		#expect(b.stringValue == "abc🌊déƒ")
 		#expect(b.dataValue == "abc🌊déƒ".data(using: .utf8))
-		#expect((try Blackbird.Value.fromAny("abc🌊déƒ".data(using: .utf8))) == b)
+		#expect((try Ironbird.Value.fromAny("abc🌊déƒ".data(using: .utf8))) == b)
 
 		let date = Date()
-		#expect((try Blackbird.Value.fromAny(date)) == .double(date.timeIntervalSince1970))
+		#expect((try Ironbird.Value.fromAny(date)) == .double(date.timeIntervalSince1970))
 
 		let url = try #require(URL(string: "https://www.marco.org/"))
-		#expect((try Blackbird.Value.fromAny(url)) == .text(url.absoluteString))
+		#expect((try Ironbird.Value.fromAny(url)) == .text(url.absoluteString))
 	}
 
 	@Test
 	func openDB() async throws {
-		let db = try Blackbird.Database(path: self.sqliteFilename, options: [.debugPrintEveryQuery, .debugPrintEveryReportedChange])
+		let db = try Ironbird.Database(path: self.sqliteFilename, options: [.debugPrintEveryQuery, .debugPrintEveryReportedChange])
 		try await TestModel.resolveSchema(in: db)
 		try await SchemaChangeAddColumnsInitial.resolveSchema(in: db)
 		try await SchemaChangeRebuildTableInitial.resolveSchema(in: db)
@@ -128,7 +128,7 @@ final class BlackbirdTests: IBLoggable {
 
 	@Test
 	func whereIDIN() async throws {
-		let db = try Blackbird.Database(path: self.sqliteFilename)
+		let db = try Ironbird.Database(path: self.sqliteFilename)
 		let count = min(TestData.URLs.count, TestData.titles.count, TestData.descriptions.count)
 
 		try await db.transaction { core in
@@ -167,10 +167,10 @@ final class BlackbirdTests: IBLoggable {
 
 	@Test
 	func queries() async throws {
-		let allFilenames = Blackbird.Database.allFilePaths(for: self.sqliteFilename)
+		let allFilenames = Ironbird.Database.allFilePaths(for: self.sqliteFilename)
 		Self.logger.debug("SQLite filenames:\n\(allFilenames.joined(separator: "\n"))")
 
-		let db = try Blackbird.Database(path: self.sqliteFilename, options: [.debugPrintEveryQuery, .debugPrintQueryParameterValues, .debugPrintEveryReportedChange])
+		let db = try Ironbird.Database(path: self.sqliteFilename, options: [.debugPrintEveryQuery, .debugPrintQueryParameterValues, .debugPrintEveryReportedChange])
 		let count = min(TestData.URLs.count, TestData.titles.count, TestData.descriptions.count)
 
 		try await db.transaction { core in
@@ -302,7 +302,7 @@ final class BlackbirdTests: IBLoggable {
 
 	@Test
 	func updateExpressions() async throws {
-		let db = try Blackbird.Database(path: self.sqliteFilename, options: [.debugPrintEveryQuery, .debugPrintEveryReportedChange, .debugPrintQueryParameterValues])
+		let db = try Ironbird.Database(path: self.sqliteFilename, options: [.debugPrintEveryQuery, .debugPrintEveryReportedChange, .debugPrintQueryParameterValues])
 
 		try await TestModelForUpdateExpressions(id: 1, i: 1, d: 1.5).write(to: db)
 		try await TestModelForUpdateExpressions(id: 2, i: 2, d: 2.5).write(to: db)
@@ -346,7 +346,7 @@ final class BlackbirdTests: IBLoggable {
 
 	@Test
 	func columnTypes() async throws {
-		let db = try Blackbird.Database(path: self.sqliteFilename, options: [.debugPrintEveryQuery, .debugPrintEveryReportedChange, .debugPrintQueryParameterValues])
+		let db = try Ironbird.Database(path: self.sqliteFilename, options: [.debugPrintEveryQuery, .debugPrintEveryReportedChange, .debugPrintQueryParameterValues])
 		try await TypeTest.resolveSchema(in: db)
 
 		let now = Date()
@@ -401,7 +401,7 @@ final class BlackbirdTests: IBLoggable {
 
 	@Test
 	func jsonSerialization() async throws {
-		let db = try Blackbird.Database(path: self.sqliteFilename, options: [.debugPrintEveryQuery, .debugPrintEveryReportedChange])
+		let db = try Ironbird.Database(path: self.sqliteFilename, options: [.debugPrintEveryQuery, .debugPrintEveryReportedChange])
 		let count = min(TestData.URLs.count, TestData.titles.count, TestData.descriptions.count)
 		try await db.transaction { core in
 			for i in 0..<count {
@@ -440,7 +440,7 @@ final class BlackbirdTests: IBLoggable {
 
 	@Test
 	func multiStatements() async throws {
-		let db = try Blackbird.Database(path: self.sqliteFilename, options: [.debugPrintEveryQuery, .debugPrintEveryReportedChange])
+		let db = try Ironbird.Database(path: self.sqliteFilename, options: [.debugPrintEveryQuery, .debugPrintEveryReportedChange])
 		try await TestModel.resolveSchema(in: db)
 		try await db.execute("PRAGMA user_version = 234; UPDATE TestModel SET url = NULL")
 		let userVersion = try await db.query("PRAGMA user_version").first?["user_version"]
@@ -449,7 +449,7 @@ final class BlackbirdTests: IBLoggable {
 	}
 
 	private func runHeavyWorkload(sqliteFilename: String) async throws {
-		let db = try Blackbird.Database(path: sqliteFilename)
+		let db = try Ironbird.Database(path: sqliteFilename)
 
 		// big block of writes to populate the DB
 		try await db.transaction { core in
@@ -493,7 +493,7 @@ final class BlackbirdTests: IBLoggable {
 
 	@Test
 	func transactionRollback() async throws {
-		let db = try Blackbird.Database(path: self.sqliteFilename, options: [.debugPrintEveryQuery, .debugPrintEveryReportedChange])
+		let db = try Ironbird.Database(path: self.sqliteFilename, options: [.debugPrintEveryQuery, .debugPrintEveryReportedChange])
 
 		let id = TestData.randomInt64()
 		let originalTitle = TestData.randomTitle
@@ -509,7 +509,7 @@ final class BlackbirdTests: IBLoggable {
 		#expect(retVal0 == "test0")
 
 		let retVal1Void = try await db.cancellableTransaction { _ in
-			throw Blackbird.Error.cancelTransaction
+			throw Ironbird.Error.cancelTransaction
 		}
 		switch retVal1Void {
 			case .rolledBack: #expect(Bool(true))
@@ -526,7 +526,7 @@ final class BlackbirdTests: IBLoggable {
 			#expect(title == "new title")
 
 			if (cancelTransaction) {
-				throw Blackbird.Error.cancelTransaction
+				throw Ironbird.Error.cancelTransaction
 			} else {
 				return "Test"
 			}
@@ -562,21 +562,21 @@ final class BlackbirdTests: IBLoggable {
 
 	@Test
 	func concurrentAccessToSameDBFile() async throws {
-		let mem1 = try Blackbird.Database.inMemoryDatabase(options: [.debugPrintEveryQuery, .debugPrintEveryReportedChange])
-		#expect(throws: Never.self) { try Blackbird.Database.inMemoryDatabase() }
+		let mem1 = try Ironbird.Database.inMemoryDatabase(options: [.debugPrintEveryQuery, .debugPrintEveryReportedChange])
+		#expect(throws: Never.self) { try Ironbird.Database.inMemoryDatabase() }
 		try await mem1.execute("PRAGMA user_version = 1") // so mem1 doesn't get deallocated until after this
 
-		let db1 = try Blackbird.Database(path: self.sqliteFilename)
-		#expect(throws: (any Swift.Error).self) { try Blackbird.Database(path: self.sqliteFilename) }
+		let db1 = try Ironbird.Database(path: self.sqliteFilename)
+		#expect(throws: (any Swift.Error).self) { try Ironbird.Database(path: self.sqliteFilename) }
 		await db1.close()
-		#expect(throws: Never.self) { try Blackbird.Database(path: self.sqliteFilename) } // should be OK to reuse a path after .close()
+		#expect(throws: Never.self) { try Ironbird.Database(path: self.sqliteFilename) } // should be OK to reuse a path after .close()
 
 		await #expect(throws: (any Swift.Error).self) { try await db1.execute("PRAGMA user_version = 1") } // test throwing errors for accessing a closed DB
 	}
 
 	@Test
 	func codingKeys() async throws {
-		let db = try Blackbird.Database(path: self.sqliteFilename, options: [.debugPrintEveryQuery, .debugPrintEveryReportedChange])
+		let db = try Ironbird.Database(path: self.sqliteFilename, options: [.debugPrintEveryQuery, .debugPrintEveryReportedChange])
 
 		let id = TestData.randomInt64()
 		let title = TestData.randomTitle
@@ -615,11 +615,11 @@ final class BlackbirdTests: IBLoggable {
 		let feedID = TestData.randomInt64()
 		let episodeID = TestData.randomInt64()
 
-		var db = try Blackbird.Database(path: self.sqliteFilename, options: [.debugPrintEveryQuery, .debugPrintEveryReportedChange])
+		var db = try Ironbird.Database(path: self.sqliteFilename, options: [.debugPrintEveryQuery, .debugPrintEveryReportedChange])
 		try await SchemaChangeAddPrimaryKeyColumnInitial(userID: userID, feedID: feedID, subscribed: true).write(to: db)
 		await db.close()
 
-		db = try Blackbird.Database(path: self.sqliteFilename, options: [.debugPrintEveryQuery, .debugPrintEveryReportedChange])
+		db = try Ironbird.Database(path: self.sqliteFilename, options: [.debugPrintEveryQuery, .debugPrintEveryReportedChange])
 		let newInstance = SchemaChangeAddPrimaryKeyColumnChanged(userID: userID, feedID: feedID, episodeID: episodeID, subscribed: false)
 		try await newInstance.write(to: db)
 
@@ -643,11 +643,11 @@ final class BlackbirdTests: IBLoggable {
 		let id = TestData.randomInt64()
 		let title = TestData.randomTitle
 
-		var db = try Blackbird.Database(path: self.sqliteFilename, options: [.debugPrintEveryQuery, .debugPrintEveryReportedChange])
+		var db = try Ironbird.Database(path: self.sqliteFilename, options: [.debugPrintEveryQuery, .debugPrintEveryReportedChange])
 		try await SchemaChangeAddColumnsInitial(id: id, title: title).write(to: db)
 		await db.close()
 
-		db = try Blackbird.Database(path: self.sqliteFilename, options: [.debugPrintEveryQuery, .debugPrintEveryReportedChange])
+		db = try Ironbird.Database(path: self.sqliteFilename, options: [.debugPrintEveryQuery, .debugPrintEveryReportedChange])
 		let newInstance = SchemaChangeAddColumnsChanged(id: TestData.randomInt64(not: id), title: TestData.randomTitle, description: "Custom", url: TestData.randomURL, art: TestData.randomData(length: 2048))
 		try await newInstance.write(to: db)
 
@@ -665,11 +665,11 @@ final class BlackbirdTests: IBLoggable {
 		let id = TestData.randomInt64()
 		let title = TestData.randomTitle
 
-		var db = try Blackbird.Database(path: self.sqliteFilename, options: [.debugPrintEveryQuery, .debugPrintEveryReportedChange])
+		var db = try Ironbird.Database(path: self.sqliteFilename, options: [.debugPrintEveryQuery, .debugPrintEveryReportedChange])
 		try await SchemaChangeAddColumnsChanged(id: id, title: title, description: "Custom", url: TestData.randomURL, art: TestData.randomData(length: 2048)).write(to: db)
 		await db.close()
 
-		db = try Blackbird.Database(path: self.sqliteFilename, options: [.debugPrintEveryQuery, .debugPrintEveryReportedChange])
+		db = try Ironbird.Database(path: self.sqliteFilename, options: [.debugPrintEveryQuery, .debugPrintEveryReportedChange])
 		let newInstance = SchemaChangeAddColumnsInitial(id: TestData.randomInt64(not: id), title: TestData.randomTitle)
 		try await newInstance.write(to: db)
 
@@ -683,11 +683,11 @@ final class BlackbirdTests: IBLoggable {
 		let id = TestData.randomInt64()
 		let title = TestData.randomTitle
 
-		var db = try Blackbird.Database(path: self.sqliteFilename, options: [.debugPrintEveryQuery, .debugPrintEveryReportedChange])
+		var db = try Ironbird.Database(path: self.sqliteFilename, options: [.debugPrintEveryQuery, .debugPrintEveryReportedChange])
 		try await SchemaChangeAddIndexInitial(id: id, title: title).write(to: db)
 		await db.close()
 
-		db = try Blackbird.Database(path: self.sqliteFilename, options: [.debugPrintEveryQuery, .debugPrintEveryReportedChange])
+		db = try Ironbird.Database(path: self.sqliteFilename, options: [.debugPrintEveryQuery, .debugPrintEveryReportedChange])
 		let newInstance = SchemaChangeAddIndexChanged(id: TestData.randomInt64(not: id), title: TestData.randomTitle)
 		try await newInstance.write(to: db)
 
@@ -701,11 +701,11 @@ final class BlackbirdTests: IBLoggable {
 		let id = TestData.randomInt64()
 		let title = TestData.randomTitle
 
-		var db = try Blackbird.Database(path: self.sqliteFilename, options: [.debugPrintEveryQuery, .debugPrintEveryReportedChange])
+		var db = try Ironbird.Database(path: self.sqliteFilename, options: [.debugPrintEveryQuery, .debugPrintEveryReportedChange])
 		try await SchemaChangeAddIndexChanged(id: id, title: title).write(to: db)
 		await db.close()
 
-		db = try Blackbird.Database(path: self.sqliteFilename, options: [.debugPrintEveryQuery, .debugPrintEveryReportedChange])
+		db = try Ironbird.Database(path: self.sqliteFilename, options: [.debugPrintEveryQuery, .debugPrintEveryReportedChange])
 		let newInstance = SchemaChangeAddIndexInitial(id: TestData.randomInt64(not: id), title: TestData.randomTitle)
 		try await newInstance.write(to: db)
 
@@ -719,11 +719,11 @@ final class BlackbirdTests: IBLoggable {
 		let id = TestData.randomInt64()
 		let title = TestData.randomTitle
 
-		var db = try Blackbird.Database(path: self.sqliteFilename, options: [.debugPrintEveryQuery, .debugPrintEveryReportedChange])
+		var db = try Ironbird.Database(path: self.sqliteFilename, options: [.debugPrintEveryQuery, .debugPrintEveryReportedChange])
 		try await SchemaChangeRebuildTableInitial(id: id, title: title, flags: 15).write(to: db)
 		await db.close()
 
-		db = try Blackbird.Database(path: self.sqliteFilename, options: [.debugPrintEveryQuery, .debugPrintEveryReportedChange])
+		db = try Ironbird.Database(path: self.sqliteFilename, options: [.debugPrintEveryQuery, .debugPrintEveryReportedChange])
 		let newInstance = SchemaChangeRebuildTableChanged(id: TestData.randomInt64(not: id), title: TestData.randomTitle, flags: "{1,0}", description: TestData.randomDescription)
 		try await newInstance.write(to: db)
 
@@ -736,18 +736,18 @@ final class BlackbirdTests: IBLoggable {
 
 	@Test
 	func columnChanges() async throws {
-		let db = try Blackbird.Database(path: self.sqliteFilename, options: [.debugPrintEveryQuery, .debugPrintEveryReportedChange])
-		let db2 = try Blackbird.Database.inMemoryDatabase()
+		let db = try Ironbird.Database(path: self.sqliteFilename, options: [.debugPrintEveryQuery, .debugPrintEveryReportedChange])
+		let db2 = try Ironbird.Database.inMemoryDatabase()
 
 		var t = TestModel(id: TestData.randomInt64(), title: "Original Title", url: TestData.randomURL)
 		#expect(t.$id.hasChanged(in: db))
 		#expect(t.$title.hasChanged(in: db))
 		#expect(t.$url.hasChanged(in: db))
-		#expect(t.changedColumns(in: db) == Blackbird.ColumnNames(["id", "title", "url"]))
+		#expect(t.changedColumns(in: db) == Ironbird.ColumnNames(["id", "title", "url"]))
 		#expect(t.$id.hasChanged(in: db2))
 		#expect(t.$title.hasChanged(in: db2))
 		#expect(t.$url.hasChanged(in: db2))
-		#expect(t.changedColumns(in: db2) == Blackbird.ColumnNames(["id", "title", "url"]))
+		#expect(t.changedColumns(in: db2) == Ironbird.ColumnNames(["id", "title", "url"]))
 
 		try await t.write(to: db)
 
@@ -758,14 +758,14 @@ final class BlackbirdTests: IBLoggable {
 		#expect(t.$id.hasChanged(in: db2))
 		#expect(t.$title.hasChanged(in: db2))
 		#expect(t.$url.hasChanged(in: db2))
-		#expect(t.changedColumns(in: db2) == Blackbird.ColumnNames(["id", "title", "url"]))
+		#expect(t.changedColumns(in: db2) == Ironbird.ColumnNames(["id", "title", "url"]))
 
 		t.title = "Updated Title"
 
 		#expect(!t.$id.hasChanged(in: db))
 		#expect(t.$title.hasChanged(in: db))
 		#expect(!t.$url.hasChanged(in: db))
-		#expect(t.changedColumns(in: db) == Blackbird.ColumnNames(["title"]))
+		#expect(t.changedColumns(in: db) == Ironbird.ColumnNames(["title"]))
 
 		try await t.write(to: db)
 
@@ -784,7 +784,7 @@ final class BlackbirdTests: IBLoggable {
 		#expect(!t2.$id.hasChanged(in: db))
 		#expect(t2.$title.hasChanged(in: db))
 		#expect(!t2.$url.hasChanged(in: db))
-		#expect(t2.changedColumns(in: db) == Blackbird.ColumnNames(["title"]))
+		#expect(t2.changedColumns(in: db) == Ironbird.ColumnNames(["title"]))
 
 		try await t2.write(to: db)
 
@@ -796,26 +796,26 @@ final class BlackbirdTests: IBLoggable {
 
 	@Test
 	func changeNotifications() async throws {
-		let db = try Blackbird.Database(path: self.sqliteFilename, options: [.debugPrintEveryQuery, .debugPrintEveryReportedChange, .debugPrintQueryParameterValues])
+		let db = try Ironbird.Database(path: self.sqliteFilename, options: [.debugPrintEveryQuery, .debugPrintEveryReportedChange, .debugPrintQueryParameterValues])
 
 		try await TestModel.resolveSchema(in: db)
 		try await TestModelWithDescription.resolveSchema(in: db)
 
 		actor ChangeState {
 			var expectedTable: String? = nil
-			var expectedKeys: Blackbird.PrimaryKeyValues? = nil
-			var expectedColumnNames: Blackbird.ColumnNames? = nil
+			var expectedKeys: Ironbird.PrimaryKeyValues? = nil
+			var expectedColumnNames: Ironbird.ColumnNames? = nil
 			var callCount = 0
 
 			func setExpectedTable(_ v: String?) { self.expectedTable = v }
-			func setExpectedKeys(_ v: Blackbird.PrimaryKeyValues?) { self.expectedKeys = v }
-			func setExpectedColumnNames(_ v: Blackbird.ColumnNames?) { self.expectedColumnNames = v }
-			func setExpectedKeysAndColumnNames(_ k: Blackbird.PrimaryKeyValues?, _ c: Blackbird.ColumnNames?) {
+			func setExpectedKeys(_ v: Ironbird.PrimaryKeyValues?) { self.expectedKeys = v }
+			func setExpectedColumnNames(_ v: Ironbird.ColumnNames?) { self.expectedColumnNames = v }
+			func setExpectedKeysAndColumnNames(_ k: Ironbird.PrimaryKeyValues?, _ c: Ironbird.ColumnNames?) {
 				self.expectedKeys = k
 				self.expectedColumnNames = c
 			}
 
-			func getExpectedKeysAndColumnNames() -> (Blackbird.PrimaryKeyValues?, Blackbird.ColumnNames?) {
+			func getExpectedKeysAndColumnNames() -> (Ironbird.PrimaryKeyValues?, Ironbird.ColumnNames?) {
 				(self.expectedKeys, self.expectedColumnNames)
 			}
 
@@ -863,13 +863,13 @@ final class BlackbirdTests: IBLoggable {
 		}
 
 		try await db.transaction { core in
-			var expectedBatchedKeys = Blackbird.PrimaryKeyValues()
+			var expectedBatchedKeys = Ironbird.PrimaryKeyValues()
 			for i in 0..<count {
 				expectedBatchedKeys.insert([.integer(Int64(i))])
 				let m = TestModelWithDescription(id: i, url: TestData.URLs[i], title: TestData.titles[i], description: TestData.descriptions[i])
 				try m.writeIsolated(to: db, core: core)
 			}
-			await state.setExpectedKeysAndColumnNames(expectedBatchedKeys, Blackbird.ColumnNames(["id", "url", "title", "description"]))
+			await state.setExpectedKeysAndColumnNames(expectedBatchedKeys, Ironbird.ColumnNames(["id", "url", "title", "description"]))
 		}
 		await megaYield()
 		expectedChangeNotificationsCallCount += 1
@@ -878,28 +878,28 @@ final class BlackbirdTests: IBLoggable {
 		// Individual change notifications
 		var m = try #require(await TestModelWithDescription.read(from: db, id: 64))
 		m.title = "Edited title!"
-		await state.setExpectedKeysAndColumnNames(Blackbird.PrimaryKeyValues([[.integer(64)]]), Blackbird.ColumnNames(["title"]))
+		await state.setExpectedKeysAndColumnNames(Ironbird.PrimaryKeyValues([[.integer(64)]]), Ironbird.ColumnNames(["title"]))
 		try await m.write(to: db)
 		await megaYield()
 		expectedChangeNotificationsCallCount += 1
 		#expect(await state.callCount == expectedChangeNotificationsCallCount)
 
 		// Unspecified/whole-table change notifications, with structured column info
-		await state.setExpectedKeysAndColumnNames(Blackbird.PrimaryKeyValues(Array(0..<count).map { [try! Blackbird.Value.fromAny($0)] }), Blackbird.ColumnNames(["url"]))
+		await state.setExpectedKeysAndColumnNames(Ironbird.PrimaryKeyValues(Array(0..<count).map { [try! Ironbird.Value.fromAny($0)] }), Ironbird.ColumnNames(["url"]))
 		try await TestModelWithDescription.update(in: db, set: [\.$url: nil], matching: .all)
 		await megaYield()
 		expectedChangeNotificationsCallCount += 1
 		#expect(await state.callCount == expectedChangeNotificationsCallCount)
 
 		// Unspecified/whole-table delete notifications, with structured column info
-		await state.setExpectedKeysAndColumnNames(Blackbird.PrimaryKeyValues(Array(0..<5).map { [try! Blackbird.Value.fromAny($0)] }), nil)
+		await state.setExpectedKeysAndColumnNames(Ironbird.PrimaryKeyValues(Array(0..<5).map { [try! Ironbird.Value.fromAny($0)] }), nil)
 		try await TestModelWithDescription.delete(from: db, matching: \.$id < 5)
 		await megaYield()
 		expectedChangeNotificationsCallCount += 1
 		#expect(await state.callCount == expectedChangeNotificationsCallCount)
 
 		// Unspecified/whole-table change notifications, with structured column info and primary keys
-		await state.setExpectedKeysAndColumnNames([[7], [8], [9]], Blackbird.ColumnNames(["url"]))
+		await state.setExpectedKeysAndColumnNames([[7], [8], [9]], Ironbird.ColumnNames(["url"]))
 		try await TestModelWithDescription.update(in: db, set: [\.$url: nil], forPrimaryKeys: [7, 8, 9])
 		await megaYield()
 		expectedChangeNotificationsCallCount += 1
@@ -919,7 +919,7 @@ final class BlackbirdTests: IBLoggable {
 		#expect(await state.callCount == expectedChangeNotificationsCallCount)
 
 		// Column-name merging
-		await state.setExpectedKeysAndColumnNames(Blackbird.PrimaryKeyValues([[.integer(31)], [.integer(32)]]), Blackbird.ColumnNames(["title", "description"]))
+		await state.setExpectedKeysAndColumnNames(Ironbird.PrimaryKeyValues([[.integer(31)], [.integer(32)]]), Ironbird.ColumnNames(["title", "description"]))
 		try await db.transaction { core in
 			var t1 = try TestModelWithDescription.readIsolated(from: db, core: core, id: 31)!
 			t1.title = "Edited title!"
@@ -934,7 +934,7 @@ final class BlackbirdTests: IBLoggable {
 		#expect(await state.callCount == expectedChangeNotificationsCallCount)
 
 		// Merging with insertions
-		await state.setExpectedKeysAndColumnNames(Blackbird.PrimaryKeyValues([[.integer(40)], [.integer(Int64(count) + 1)]]), Blackbird.ColumnNames(["id", "title", "description", "url"]))
+		await state.setExpectedKeysAndColumnNames(Ironbird.PrimaryKeyValues([[.integer(40)], [.integer(Int64(count) + 1)]]), Ironbird.ColumnNames(["id", "title", "description", "url"]))
 		try await db.transaction { core in
 			var t1 = try TestModelWithDescription.readIsolated(from: db, core: core, id: 40)!
 			t1.title = "Edited title!"
@@ -948,7 +948,7 @@ final class BlackbirdTests: IBLoggable {
 		#expect(await state.callCount == expectedChangeNotificationsCallCount)
 
 		// Merging with deletions
-		await state.setExpectedKeysAndColumnNames(Blackbird.PrimaryKeyValues([[.integer(50)], [.integer(51)]]), Blackbird.ColumnNames(["id", "title", "description", "url"]))
+		await state.setExpectedKeysAndColumnNames(Ironbird.PrimaryKeyValues([[.integer(50)], [.integer(51)]]), Ironbird.ColumnNames(["id", "title", "description", "url"]))
 		try await db.transaction { core in
 			var t1 = try TestModelWithDescription.readIsolated(from: db, core: core, id: 50)!
 			t1.title = "Edited title!"
@@ -992,7 +992,7 @@ final class BlackbirdTests: IBLoggable {
 
 	@Test
 	func optionalColumn() async throws {
-		let db = try Blackbird.Database.inMemoryDatabase(options: [.debugPrintEveryQuery, .debugPrintQueryParameterValues])
+		let db = try Ironbird.Database.inMemoryDatabase(options: [.debugPrintEveryQuery, .debugPrintQueryParameterValues])
 
 		let testDate = Date()
 		let testURL = try #require(URL(string: "https://github.com/marcoarment/Blackbird"))
@@ -1064,7 +1064,7 @@ final class BlackbirdTests: IBLoggable {
 
 	@Test
 	func uniqueIndex() async throws {
-		let db = try Blackbird.Database.inMemoryDatabase(options: [.debugPrintEveryQuery, .debugPrintQueryParameterValues])
+		let db = try Ironbird.Database.inMemoryDatabase(options: [.debugPrintEveryQuery, .debugPrintQueryParameterValues])
 
 		let testDate = Date()
 		try await TestModelWithUniqueIndex(id: 1, a: "a1", b: 100, c: testDate).write(to: db)
@@ -1073,7 +1073,7 @@ final class BlackbirdTests: IBLoggable {
 		var caughtExpectedError = false
 		do {
 			try await TestModelWithUniqueIndex(id: 3, a: "a2", b: 200, c: testDate).write(to: db)
-		} catch Blackbird.Database.Error.uniqueConstraintFailed {
+		} catch Ironbird.Database.Error.uniqueConstraintFailed {
 			caughtExpectedError = true
 		}
 		#expect(caughtExpectedError)
@@ -1107,10 +1107,10 @@ final class BlackbirdTests: IBLoggable {
 		#expect(all[2].b == 201)
 	}
 
-	// To test bug #25: https://github.com/marcoarment/Blackbird/issues/25
+	// To test bug #25: https://github.com/marcoarment/Ironbird/issues/25
 	@Test
 	func concurrentTransactions() async throws {
-		let db = try Blackbird.Database(path: self.sqliteFilename)
+		let db = try Ironbird.Database(path: self.sqliteFilename)
 
 		try await withThrowingTaskGroup { tg in
 			for i in 0..<1000 {
@@ -1128,7 +1128,7 @@ final class BlackbirdTests: IBLoggable {
 
 	@Test(CacheLimit(testModel: 10_000))
 	func cache() async throws {
-		let db = try Blackbird.Database(path: self.sqliteFilename)
+		let db = try Ironbird.Database(path: self.sqliteFilename)
 
 		// big block of writes to populate the DB
 		let lastURL = try await db.transaction { core in
@@ -1227,9 +1227,9 @@ final class BlackbirdTests: IBLoggable {
 
 	@Test
 	func fts() async throws {
-		let options: Blackbird.Database.Options = [.debugPrintEveryQuery, .requireModelSchemaValidationBeforeUse]
+		let options: Ironbird.Database.Options = [.debugPrintEveryQuery, .requireModelSchemaValidationBeforeUse]
 
-		let db1 = try Blackbird.Database(path: self.sqliteFilename, options: options)
+		let db1 = try Ironbird.Database(path: self.sqliteFilename, options: options)
 		let resolution1 = try await FTSModel.resolveSchema(in: db1)
 		#expect(resolution1.contains(.createdTable))
 		#expect(resolution1.contains(.migratedFullTextIndex))
@@ -1248,7 +1248,7 @@ final class BlackbirdTests: IBLoggable {
 		#expect(results1.count == 38)
 		await db1.close()
 
-		let db2 = try Blackbird.Database(path: self.sqliteFilename, options: options)
+		let db2 = try Ironbird.Database(path: self.sqliteFilename, options: options)
 		let resolution2 = try await FTSModel.resolveSchema(in: db2)
 		#expect(!resolution2.contains(.createdTable))
 		#expect(!resolution2.contains(.migratedFullTextIndex))
@@ -1260,7 +1260,7 @@ final class BlackbirdTests: IBLoggable {
 		#expect(results2b.count == 10)
 		await db2.close()
 
-		let db3 = try Blackbird.Database(path: self.sqliteFilename, options: options)
+		let db3 = try Ironbird.Database(path: self.sqliteFilename, options: options)
 		let resolution3 = try await FTSModelAfterMigration.resolveSchema(in: db3)
 		#expect(!resolution3.contains(.createdTable))
 		#expect(resolution3.contains(.migratedFullTextIndex))
@@ -1270,14 +1270,14 @@ final class BlackbirdTests: IBLoggable {
 		#expect(results3.count == 18)
 		await db3.close()
 
-		let db4 = try Blackbird.Database(path: self.sqliteFilename, options: options)
+		let db4 = try Ironbird.Database(path: self.sqliteFilename, options: options)
 		let resolution4 = try await FTSModelAfterDeletion.resolveSchema(in: db4)
 		#expect(!resolution4.contains(.createdTable))
 		#expect(resolution4.contains(.migratedFullTextIndex))
 		#expect(!resolution4.contains(.migratedTable))
 		await db4.close()
 
-		let db5 = try Blackbird.Database(path: self.sqliteFilename, options: options)
+		let db5 = try Ironbird.Database(path: self.sqliteFilename, options: options)
 		let resolution5 = try await FTSModelAfterDeletion.resolveSchema(in: db5)
 		#expect(!resolution5.contains(.createdTable))
 		#expect(!resolution5.contains(.migratedFullTextIndex))
@@ -1286,7 +1286,7 @@ final class BlackbirdTests: IBLoggable {
 
 	@Test
 	func backup() async throws {
-		let db = try Blackbird.Database(path: self.sqliteFilename)
+		let db = try Ironbird.Database(path: self.sqliteFilename)
 		for i in 0..<1000 {
 			try await TestModel(id: Int64(i), title: TestData.randomTitle, url: TestData.randomURL).write(to: db)
 		}
@@ -1294,14 +1294,14 @@ final class BlackbirdTests: IBLoggable {
 		Self.logger.debug("Creating backup at \(backupFilePath)")
 
 		defer {
-			for path in Blackbird.Database.allFilePaths(for: backupFilePath) {
+			for path in Ironbird.Database.allFilePaths(for: backupFilePath) {
 				try? FileManager.default.removeItem(atPath: path)
 			}
 		}
 
 		try await db.core.backup(to: backupFilePath, pagesPerStep: 100, printProgress: true)
 
-		let backupDb = try Blackbird.Database(path: backupFilePath)
+		let backupDb = try Ironbird.Database(path: backupFilePath)
 
 		let modelsInDb = try await TestModel.read(from: db)
 		let modelsInBackupDb = try await TestModel.read(from: backupDb)
@@ -1314,11 +1314,11 @@ final class BlackbirdTests: IBLoggable {
 
 	/* Tests duplicate-index detection. Throws fatal error on success.
 	 func testDuplicateIndex() async throws {
-	     var db = try Blackbird.Database(path: sqliteFilename, options: [.debugPrintEveryQuery, .debugPrintQueryParameterValues])
+	     var db = try Ironbird.Database(path: sqliteFilename, options: [.debugPrintEveryQuery, .debugPrintQueryParameterValues])
 	     try await DuplicateIndexesModel(id: 1, title: "Hi").write(to: db)
 	     await db.close()
 
-	     db = try Blackbird.Database(path: sqliteFilename, options: [.debugPrintEveryQuery, .debugPrintQueryParameterValues])
+	     db = try Ironbird.Database(path: sqliteFilename, options: [.debugPrintEveryQuery, .debugPrintQueryParameterValues])
 	     try await DuplicateIndexesModel(id: 2, title: "Hi").write(to: db)
 	 }
 	 */

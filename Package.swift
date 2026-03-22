@@ -2,7 +2,7 @@
 
 import PackageDescription
 
-let package = Package(name: "Blackbird",
+let package = Package(name: "Ironbird",
 					  platforms: [
 					  	.macOS(.v15),
 					  	.iOS(.v18),
@@ -10,8 +10,8 @@ let package = Package(name: "Blackbird",
 					  	.tvOS(.v18),
 					  ],
 					  products: [
-					  	.library(name: "Blackbird",
-								   targets: ["Blackbird"]),
+					  	.library(name: "Ironbird",
+								   targets: ["Ironbird"]),
 					  ],
 					  dependencies: [
 					  	.package(url: "https://github.com/sideeffect-io/AsyncExtensions.git", .upToNextMajor(from: "0.5.3")),
@@ -19,7 +19,7 @@ let package = Package(name: "Blackbird",
 					  	.package(url: "https://github.com/arennow/Loggable.git", branch: "2.0.0-beta"),
 					  ],
 					  targets: [
-					  	.target(name: "Blackbird",
+					  	.target(name: "Ironbird",
 								  dependencies: [
 								  	"AsyncExtensions",
 								  	"Semaphore",
@@ -28,9 +28,9 @@ let package = Package(name: "Blackbird",
 								  swiftSettings: [
 								  	.enableUpcomingFeature("MemberImportVisibility"),
 								  ]),
-					  	.testTarget(name: "BlackbirdTests",
+					  	.testTarget(name: "IronbirdTests",
 									  dependencies: [
-									  	"Blackbird",
+									  	"Ironbird",
 									  	"Semaphore",
 									  ],
 									  swiftSettings: [

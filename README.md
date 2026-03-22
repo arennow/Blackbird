@@ -1,4 +1,4 @@
-# Blackbird
+# Ironbird
 
 A SQLite database wrapper and model layer, using Swift concurrency and `Codable`, with no other dependencies.
 
@@ -13,65 +13,65 @@ Philosophy:
  
 ## Project status
 
-Blackbird is a __beta__.
+Ironbird is a __beta__.
 
 Minor changes may still occur that break backwards compatibility with code or databases.
 
-I'm using Blackbird in shipping software now, but do so at your own risk.
+I'm using Ironbird in shipping software now, but do so at your own risk.
 
-## BlackbirdModel
+## IronbirdModel
 
-A protocol to store structs in the [SQLite](https://www.sqlite.org/)-powered [Blackbird.Database](#blackbirddatabase), with compiler-checked key-paths for common operations.
+A protocol to store structs in the [SQLite](https://www.sqlite.org/)-powered [Ironbird.Database](#ironbirddatabase), with compiler-checked key-paths for common operations.
 
 Here's how you define a table:
 
 ```swift
-import Blackbird
+import Ironbird
 
-struct Post: BlackbirdModel {
-    @BlackbirdColumn var id: Int
-    @BlackbirdColumn var title: String
-    @BlackbirdColumn var url: URL?
+struct Post: IronbirdModel {
+    @IronbirdColumn var id: Int
+    @IronbirdColumn var title: String
+    @IronbirdColumn var url: URL?
 }
 ```
 
 That's it. No `CREATE TABLE`, no separate table-definition logic, no additional steps.
 
-And __automatic migrations__. Want to add or remove columns or indexes, or start using more of Blackbird's features such as custom `enum` columns, unique indexes, or custom primary keys? Just change the code:
+And __automatic migrations__. Want to add or remove columns or indexes, or start using more of Ironbird's features such as custom `enum` columns, unique indexes, or custom primary keys? Just change the code:
 
 ```swift
-struct Post: BlackbirdModel {
-    static var primaryKey: [BlackbirdColumnKeyPath] = [ \.$guid, \.$id ]
+struct Post: IronbirdModel {
+    static var primaryKey: [IronbirdColumnKeyPath] = [ \.$guid, \.$id ]
 
-    static var indexes: [[BlackbirdColumnKeyPath]] = [
+    static var indexes: [[IronbirdColumnKeyPath]] = [
         [ \.$title ],
         [ \.$publishedDate, \.$format ],
     ]
 
-    static var uniqueIndexes: [[BlackbirdColumnKeyPath]] = [
+    static var uniqueIndexes: [[IronbirdColumnKeyPath]] = [
         [ \.$guid ],
     ]
     
-    enum Format: Int, BlackbirdIntegerEnum {
+    enum Format: Int, IronbirdIntegerEnum {
         case markdown
         case html
     }
     
-    @BlackbirdColumn var id: Int
-    @BlackbirdColumn var guid: String
-    @BlackbirdColumn var title: String
-    @BlackbirdColumn var publishedDate: Date?
-    @BlackbirdColumn var format: Format
-    @BlackbirdColumn var url: URL?
-    @BlackbirdColumn var image: Data?
+    @IronbirdColumn var id: Int
+    @IronbirdColumn var guid: String
+    @IronbirdColumn var title: String
+    @IronbirdColumn var publishedDate: Date?
+    @IronbirdColumn var format: Format
+    @IronbirdColumn var url: URL?
+    @IronbirdColumn var image: Data?
 }
 ```
 
-…and Blackbird will automatically migrate the table to the new schema at runtime.
+…and Ironbird will automatically migrate the table to the new schema at runtime.
 
 ### Queries
 
-Write instances safely and easily to a [Blackbird.Database](#blackbird-database):
+Write instances safely and easily to a [Ironbird.Database](#ironbird-database):
 
 ```swift
 let post = Post(id: 1, title: "What I had for breakfast")
@@ -130,12 +130,12 @@ for await _ in Post.changeSequence(in: db, primaryKey: 3, columns: [\.$title]) {
 }
 ```
 
-## Blackbird.Database
+## Ironbird.Database
 
-A lightweight async wrapper around [SQLite](https://www.sqlite.org/) that can be used with or without [BlackbirdModel](#BlackbirdModel).
+A lightweight async wrapper around [SQLite](https://www.sqlite.org/) that can be used with or without [IronbirdModel](#IronbirdModel).
 
 ```swift
-let db = try Blackbird.Database(path: "/tmp/db.sqlite")
+let db = try Ironbird.Database(path: "/tmp/db.sqlite")
 
 // SELECT with parameterized queries
 for row in try await db.query("SELECT id FROM posts WHERE state = ?", 1) {
@@ -159,17 +159,17 @@ try await db.transaction { core in
 
 * __KeyPath to/from String, static reflection of a type's KeyPaths:__ With the abilities to get a type's available KeyPaths (without some [awful hacks](https://forums.swift.org/t/getting-keypaths-to-members-automatically-using-mirror/21207)) and create KeyPaths from strings at runtime, many of my hacks using Codable could be replaced with KeyPaths, which would be cleaner and probably much faster.
 
-* __Method to get CodingKeys enum names and custom values:__ It's currently impossible to get the names of `CodingKeys` cases without resorting to [this awful hack](https://forums.swift.org/t/getting-the-name-of-a-swift-enum-value/35654/18). Decoders must know these names to perform proper decoding to arbitrary types that may have custom `CodingKeys` declared. If this hack ever stops working, BlackbirdModel cannot support custom `CodingKeys`.
+* __Method to get CodingKeys enum names and custom values:__ It's currently impossible to get the names of `CodingKeys` cases without resorting to [this awful hack](https://forums.swift.org/t/getting-the-name-of-a-swift-enum-value/35654/18). Decoders must know these names to perform proper decoding to arbitrary types that may have custom `CodingKeys` declared. If this hack ever stops working, IronbirdModel cannot support custom `CodingKeys`.
 
-* __Cleaner protocol name (`Blackbird.Model`):__ Protocols can't contain dots or be nested within another type.
+* __Cleaner protocol name (`Ironbird.Model`):__ Protocols can't contain dots or be nested within another type.
 
-* __Nested struct definitions inside protocols__ could make a lot of my "BlackbirdModel…" names shorter.
+* __Nested struct definitions inside protocols__ could make a lot of my "IronbirdModel…" names shorter.
 
 ## FAQ
 
-### why is it called blackbird
+### why is it called ironbird
 
-[The plane](https://en.wikipedia.org/wiki/Lockheed_SR-71_Blackbird), of course.
+[The plane](https://en.wikipedia.org/wiki/Lockheed_SR-71_Ironbird), of course.
 
 It's old, awesome, and ridiculously fast. Well, this database library is based on old, awesome tech (SQLite), and it's ridiculously fast.
 
@@ -177,7 +177,7 @@ It's old, awesome, and ridiculously fast. Well, this database library is based o
 
 ### you know there are lots of other things called that
 
-Of course [there are](https://en.wikipedia.org/wiki/Blackbird). Who cares?
+Of course [there are](https://en.wikipedia.org/wiki/Ironbird). Who cares?
 
 This is a database engine that'll be used by, at most, a handful of nerds. It doesn't matter what it's called.
 
@@ -185,11 +185,11 @@ I like unique names (rather than generic or descriptive names, like `Model` or `
 
 ### why don't you support [SQLite feature]
 
-Blackbird is designed to make it very fast and easy to write apps that have the most common, straightforward database needs.
+Ironbird is designed to make it very fast and easy to write apps that have the most common, straightforward database needs.
 
-Custom SQL is supported in many ways, but more advanced SQLite behavior like triggers, views, windows, foreign-key constraints, cascading writes, partial or expression indexes, virtual columns, etc. are not directly supported by Blackbird and may cause undefined behavior if used.
+Custom SQL is supported in many ways, but more advanced SQLite behavior like triggers, views, windows, foreign-key constraints, cascading writes, partial or expression indexes, virtual columns, etc. are not directly supported by Ironbird and may cause undefined behavior if used.
 
-By not supporting esoteric or specialized features that apps typically don't need, Blackbird is able to offer a cleaner API and more useful functionality for common cases.
+By not supporting esoteric or specialized features that apps typically don't need, Ironbird is able to offer a cleaner API and more useful functionality for common cases.
 
 ### why didn't you just use [other SQLite library]
 
@@ -205,14 +205,14 @@ And when I write the libraries, I understand how everything works as I'm using t
 
 I know. Ironic, considering that I named this one after the fastest plane.
 
-Blackbird is optimized for speed of __development__. It's pretty fast in execution, too, but clarity, ease of use, reduced repetition, and simple tooling are higher priorities.
+Ironbird is optimized for speed of __development__. It's pretty fast in execution, too, but clarity, ease of use, reduced repetition, and simple tooling are higher priorities.
 
-Blackbird also offers automatic caching and fine-grained change reporting. This helps apps avoid many unnecessary queries, reloads, and UI refreshes, which can result in faster overall app performance.
+Ironbird also offers automatic caching and fine-grained change reporting. This helps apps avoid many unnecessary queries, reloads, and UI refreshes, which can result in faster overall app performance.
 
-Other Swift SQLite libraries can be faster at raw database performance by omitting much of Blackbird's reflection, abstraction, and key-path usage. Some use code-generation methods, which can execute very efficiently but complicate development more than I'd like. Others take less-abstracted approaches that enable more custom behavior but make usage more complicated.
+Other Swift SQLite libraries can be faster at raw database performance by omitting much of Ironbird's reflection, abstraction, and key-path usage. Some use code-generation methods, which can execute very efficiently but complicate development more than I'd like. Others take less-abstracted approaches that enable more custom behavior but make usage more complicated.
 
 I've chosen different trade-offs to better fit my needs. I've never written an app that was too slow to read its database, but I've frequently struggled with maintenance of large, complex codebases.
 
-Blackbird's goal is to achieve my ideal balance of ease-of-use and bug-avoidance, even though it's therefore not the fastest SQLite library in execution.
+Ironbird's goal is to achieve my ideal balance of ease-of-use and bug-avoidance, even though it's therefore not the fastest SQLite library in execution.
 
 Phones keep getting faster, but a bug is a bug forever.

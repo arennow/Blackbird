@@ -1,4 +1,4 @@
-#  ``Blackbird``
+#  ``Ironbird``
 
 A lightweight, asynchronous SQLite wrapper and model layer.
 
@@ -8,8 +8,8 @@ A small, fast, lightweight SQLite database wrapper and model layer, based on mod
 
 ## Topics
 
-### Blackbird
+### Ironbird
 
-- ``Blackbird/Database``
-- ``BlackbirdModel``
+- ``Ironbird/Database``
+- ``IronbirdModel``
 

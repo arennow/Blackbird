@@ -35,27 +35,27 @@ import Foundation
 
 // MARK: - Standard row
 
-public extension Blackbird {
+public extension Ironbird {
 	/// A dictionary of a single table row's values, keyed by their column names.
-	typealias Row = Dictionary<String, Blackbird.Value>
+	typealias Row = Dictionary<String, Ironbird.Value>
 }
 
-public extension Blackbird.Row {
-	subscript<T: BlackbirdModel, V: BlackbirdColumnWrappable>(_ keyPath: KeyPath<T, BlackbirdColumn<Optional<V>>>) -> V? {
+public extension Ironbird.Row {
+	subscript<T: IronbirdModel, V: IronbirdColumnWrappable>(_ keyPath: KeyPath<T, IronbirdColumn<Optional<V>>>) -> V? {
 		let table = SchemaGenerator.shared.table(for: T.self)
 		let columnName = table.keyPathToColumnName(keyPath: keyPath)
 
 		guard let value = self[columnName], value != .null else { return nil }
-		guard let typedValue = V.fromValue(value) else { fatalError("\(String(describing: T.self)).\(columnName) value in Blackbird.Row dictionary not convertible to \(String(describing: V.self))") }
+		guard let typedValue = V.fromValue(value) else { fatalError("\(String(describing: T.self)).\(columnName) value in Ironbird.Row dictionary not convertible to \(String(describing: V.self))") }
 		return typedValue
 	}
 
-	subscript<T: BlackbirdModel, V: BlackbirdColumnWrappable>(_ keyPath: KeyPath<T, BlackbirdColumn<V>>) -> V {
+	subscript<T: IronbirdModel, V: IronbirdColumnWrappable>(_ keyPath: KeyPath<T, IronbirdColumn<V>>) -> V {
 		let table = SchemaGenerator.shared.table(for: T.self)
 		let columnName = table.keyPathToColumnName(keyPath: keyPath)
 
-		guard let value = self[columnName] else { fatalError("\(String(describing: T.self)).\(columnName) value not present in Blackbird.Row dictionary") }
-		guard let typedValue = V.fromValue(value) else { fatalError("\(String(describing: T.self)).\(columnName) value in Blackbird.Row dictionary not convertible to \(String(describing: V.self))") }
+		guard let value = self[columnName] else { fatalError("\(String(describing: T.self)).\(columnName) value not present in Ironbird.Row dictionary") }
+		guard let typedValue = V.fromValue(value) else { fatalError("\(String(describing: T.self)).\(columnName) value in Ironbird.Row dictionary not convertible to \(String(describing: V.self))") }
 		return typedValue
 	}
 }
@@ -70,45 +70,45 @@ public extension Blackbird.Row {
 //
 //   row[\MyModelName.$title]
 //
-public extension Blackbird {
-	/// A specialized version of ``Row`` associated with its source ``BlackbirdModel`` type for convenient access to its values with column key-paths.
-	struct ModelRow<T: BlackbirdModel>: Collection, Equatable, Sendable {
-		private let table: Blackbird.Table
+public extension Ironbird {
+	/// A specialized version of ``Row`` associated with its source ``IronbirdModel`` type for convenient access to its values with column key-paths.
+	struct ModelRow<T: IronbirdModel>: Collection, Equatable, Sendable {
+		private let table: Ironbird.Table
 
-		init(_ row: Blackbird.Row, table: Blackbird.Table) {
+		init(_ row: Ironbird.Row, table: Ironbird.Table) {
 			self.table = table
 			self.dictionary = row
 		}
 
-		public var row: Blackbird.Row { self.dictionary }
+		public var row: Ironbird.Row { self.dictionary }
 
-		public subscript<V: BlackbirdColumnWrappable>(_ keyPath: KeyPath<T, BlackbirdColumn<Optional<V>>>) -> V? {
+		public subscript<V: IronbirdColumnWrappable>(_ keyPath: KeyPath<T, IronbirdColumn<Optional<V>>>) -> V? {
 			let columnName = self.table.keyPathToColumnName(keyPath: keyPath)
 
 			guard let value = dictionary[columnName], value != .null else { return nil }
-			guard let typedValue = V.fromValue(value) else { fatalError("\(String(describing: T.self)).\(columnName) value in Blackbird.Row dictionary not convertible to \(String(describing: V.self))") }
+			guard let typedValue = V.fromValue(value) else { fatalError("\(String(describing: T.self)).\(columnName) value in Ironbird.Row dictionary not convertible to \(String(describing: V.self))") }
 			return typedValue
 		}
 
-		public subscript<V: BlackbirdColumnWrappable>(_ keyPath: KeyPath<T, BlackbirdColumn<V>>) -> V {
+		public subscript<V: IronbirdColumnWrappable>(_ keyPath: KeyPath<T, IronbirdColumn<V>>) -> V {
 			let columnName = self.table.keyPathToColumnName(keyPath: keyPath)
 
-			guard let value = dictionary[columnName] else { fatalError("\(String(describing: T.self)).\(columnName) value not present in Blackbird.Row dictionary") }
-			guard let typedValue = V.fromValue(value) else { fatalError("\(String(describing: T.self)).\(columnName) value in Blackbird.Row dictionary not convertible to \(String(describing: V.self))") }
+			guard let value = dictionary[columnName] else { fatalError("\(String(describing: T.self)).\(columnName) value not present in Ironbird.Row dictionary") }
+			guard let typedValue = V.fromValue(value) else { fatalError("\(String(describing: T.self)).\(columnName) value in Ironbird.Row dictionary not convertible to \(String(describing: V.self))") }
 			return typedValue
 		}
 
-		public func value(keyPath: PartialKeyPath<T>) -> Blackbird.Value? {
+		public func value(keyPath: PartialKeyPath<T>) -> Ironbird.Value? {
 			let columnName = self.table.keyPathToColumnName(keyPath: keyPath)
-			guard let value = dictionary[columnName] else { fatalError("\(String(describing: T.self)).\(columnName) value not present in Blackbird.Row dictionary") }
+			guard let value = dictionary[columnName] else { fatalError("\(String(describing: T.self)).\(columnName) value not present in Ironbird.Row dictionary") }
 			return value
 		}
 
 		// Collection conformance
-		public typealias DictionaryType = Dictionary<String, Blackbird.Value>
+		public typealias DictionaryType = Dictionary<String, Ironbird.Value>
 		public typealias Index = DictionaryType.Index
 		private var dictionary: DictionaryType = [:]
-		public var keys: Dictionary<String, Blackbird.Value>.Keys { self.dictionary.keys }
+		public var keys: Dictionary<String, Ironbird.Value>.Keys { self.dictionary.keys }
 		public typealias Indices = DictionaryType.Indices
 		public typealias Iterator = DictionaryType.Iterator
 		public typealias SubSequence = DictionaryType.SubSequence
@@ -117,12 +117,12 @@ public extension Blackbird {
 		public subscript(position: Index) -> Iterator.Element { self.dictionary[position] }
 		public subscript(bounds: Range<Index>) -> SubSequence { self.dictionary[bounds] }
 		public var indices: Indices { self.dictionary.indices }
-		public subscript(key: String) -> Blackbird.Value? {
+		public subscript(key: String) -> Ironbird.Value? {
 			get { self.dictionary[key] }
 			set { self.dictionary[key] = newValue }
 		}
 
 		public func index(after i: Index) -> Index { self.dictionary.index(after: i) }
-		public func makeIterator() -> DictionaryIterator<String, Blackbird.Value> { self.dictionary.makeIterator() }
+		public func makeIterator() -> DictionaryIterator<String, Ironbird.Value> { self.dictionary.makeIterator() }
 	}
 }

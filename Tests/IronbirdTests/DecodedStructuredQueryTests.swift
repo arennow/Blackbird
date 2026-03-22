@@ -1,11 +1,11 @@
 //
 //  DecodedStructuredQueryTests.swift
-//  Blackbird
+//  Ironbird
 //
 //  Created by Aaron Rennow on 2025-04-23.
 //
 
-@testable import Blackbird
+@testable import Ironbird
 import Testing
 
 struct DecodedStructuredQueryTests {
@@ -24,14 +24,14 @@ struct DecodedStructuredQueryTests {
 	@Test func selectAllMatching() {
 		let dsq = DecodedStructuredQuery(matching: \FakeModel.$id > 5)
 		#expect(dsq.query == "SELECT * FROM `FakeModel` WHERE `id` > ?")
-		#expect(dsq.whereArguments as? Array<Blackbird.Value> == [5])
+		#expect(dsq.whereArguments as? Array<Ironbird.Value> == [5])
 	}
 
 	@Test func selectAllMatchingOrderBy() {
 		let dsq = DecodedStructuredQuery(matching: \FakeModel.$id > 5,
 										 orderBy: [.descending(\.$name)])
 		#expect(dsq.query == "SELECT * FROM `FakeModel` WHERE `id` > ? ORDER BY `name` DESC")
-		#expect(dsq.whereArguments as? Array<Blackbird.Value> == [5])
+		#expect(dsq.whereArguments as? Array<Ironbird.Value> == [5])
 	}
 
 	@Test func selectAllOrderByLimit() {
@@ -57,7 +57,7 @@ struct DecodedStructuredQueryTests {
 	}
 }
 
-fileprivate struct FakeModel: BlackbirdModel {
-	@BlackbirdColumn var id: Int
-	@BlackbirdColumn var name: String
+fileprivate struct FakeModel: IronbirdModel {
+	@IronbirdColumn var id: Int
+	@IronbirdColumn var name: String
 }

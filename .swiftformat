@@ -22,5 +22,6 @@
 --disable wrapFunctionBodies
 --disable docComments
 --disable swiftTestingTestCaseNames
+--disable headerFileName
 --enable acronyms
 --enable numberFormatting

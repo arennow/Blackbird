@@ -34,8 +34,8 @@
 import Foundation
 import SQLite3
 
-/// Defines a searchable field for a full-text index in a ``BlackbirdModel/fullTextSearchableColumns`` dictionary.
-public struct BlackbirdModelFullTextSearchableColumn: Equatable, Hashable, Sendable {
+/// Defines a searchable field for a full-text index in a ``IronbirdModel/fullTextSearchableColumns`` dictionary.
+public struct IronbirdModelFullTextSearchableColumn: Equatable, Hashable, Sendable {
 	/// This column should be indexed as a text column, and can be used with `.match()` operations, with the default weight of `1.0`.
 	public static var text: Self { .init(weight: 1.0, indexed: true) }
 
@@ -62,7 +62,7 @@ public struct BlackbirdModelFullTextSearchableColumn: Equatable, Hashable, Senda
 }
 
 /// Options for full-text-search queries.
-public struct BlackbirdModelSearchOptions<T: BlackbirdModel>: Sendable {
+public struct IronbirdModelSearchOptions<T: IronbirdModel>: Sendable {
 	public enum HighlightMode: Sendable {
 		/// Do not generate highlights.
 		case none
@@ -109,25 +109,25 @@ public struct BlackbirdModelSearchOptions<T: BlackbirdModel>: Sendable {
 	/// Whether and how to generate snippets showing search terms in results.
 	let snippets: SnippetMode
 
-	/// If `true`, every instance in search results will be prefetched and available from the ``BlackbirdModelSearchResult/preloadedInstance`` property.
+	/// If `true`, every instance in search results will be prefetched and available from the ``IronbirdModelSearchResult/preloadedInstance`` property.
 	let preloadInstances: Bool
 
 	/// If set, relevance scores are multiplied by the numeric value in this column for search ranking. Results with higher values in this column will be ranked higher. This column must be in the full-text index.
 	///
 	/// Can be used simultaneously with ``scoreMultiple``. Scores will be multiplied by both values.
-	let scoreMultipleColumn: T.BlackbirdColumnKeyPath?
+	let scoreMultipleColumn: T.IronbirdColumnKeyPath?
 
 	/// If set, all result scores in this query are multiplied by this value. Useful when merging the results of multiple searches, such as when performing secondary searches for spelling-corrected queries.
 	///
 	/// Can be used simultaneously with ``scoreMultipleColumn``. Scores will be multiplied by both values.
 	let scoreMultiple: Double
 
-	let orderBy: [BlackbirdModelOrderClause<T>]
+	let orderBy: [IronbirdModelOrderClause<T>]
 
 	/// The default options: generate highlights and snippets, preload instances, and use only relevance-based ranking.
 	public static var `default`: Self { .init() }
 
-	public init(highlights: HighlightMode = .generate(prefix: "<b>", suffix: "</b>"), snippets: SnippetMode = .generate(contextWords: 7, prefix: "<b>", suffix: "</b>", ellipsis: "…"), preloadInstances: Bool = true, scoreMultiple: Double = 1.0, scoreMultipleColumn: T.BlackbirdColumnKeyPath? = nil, orderBy: BlackbirdModelOrderClause<T> ...) {
+	public init(highlights: HighlightMode = .generate(prefix: "<b>", suffix: "</b>"), snippets: SnippetMode = .generate(contextWords: 7, prefix: "<b>", suffix: "</b>", ellipsis: "…"), preloadInstances: Bool = true, scoreMultiple: Double = 1.0, scoreMultipleColumn: T.IronbirdColumnKeyPath? = nil, orderBy: IronbirdModelOrderClause<T> ...) {
 		self.highlights = highlights
 		self.snippets = snippets
 		self.preloadInstances = preloadInstances
@@ -136,7 +136,7 @@ public struct BlackbirdModelSearchOptions<T: BlackbirdModel>: Sendable {
 		self.orderBy = orderBy
 	}
 
-	public init(highlights: HighlightMode = .generate(prefix: "<b>", suffix: "</b>"), snippets: SnippetMode = .generate(contextWords: 7, prefix: "<b>", suffix: "</b>", ellipsis: "…"), preloadInstances: Bool = true, scoreMultiple: Double = 1.0, scoreMultipleColumn: T.BlackbirdColumnKeyPath? = nil, orderBy: [BlackbirdModelOrderClause<T>]) {
+	public init(highlights: HighlightMode = .generate(prefix: "<b>", suffix: "</b>"), snippets: SnippetMode = .generate(contextWords: 7, prefix: "<b>", suffix: "</b>", ellipsis: "…"), preloadInstances: Bool = true, scoreMultiple: Double = 1.0, scoreMultipleColumn: T.IronbirdColumnKeyPath? = nil, orderBy: [IronbirdModelOrderClause<T>]) {
 		self.highlights = highlights
 		self.snippets = snippets
 		self.preloadInstances = preloadInstances
@@ -147,20 +147,20 @@ public struct BlackbirdModelSearchOptions<T: BlackbirdModel>: Sendable {
 }
 
 /// A matching model from a full-text search query, with snippets to highlight the query in the source text.
-public struct BlackbirdModelSearchResult<T: BlackbirdModel>: Identifiable, Sendable {
+public struct IronbirdModelSearchResult<T: IronbirdModel>: Identifiable, Sendable {
 	/// Intended only for `Identifiable` conformance, not external use.
-	public var id: Blackbird.Value { self.rowid }
+	public var id: Ironbird.Value { self.rowid }
 
 	/// The score of this item within the search that generated it. Results with higher values were ranked earlier and considered more relevant than those with lower values.
 	///
 	/// Values are only meaningful as relative relevance within their search, not as an absolute scale or indicator of anything outside the context of the search that generated them.
 	public let score: Double
 
-	private let highlights: Blackbird.ModelRow<T>?
-	private let highlightMode: BlackbirdModelSearchOptions<T>.HighlightMode
-	private let snippets: Blackbird.ModelRow<T>?
-	private let snippetMode: BlackbirdModelSearchOptions<T>.SnippetMode
-	private let rowid: Blackbird.Value
+	private let highlights: Ironbird.ModelRow<T>?
+	private let highlightMode: IronbirdModelSearchOptions<T>.HighlightMode
+	private let snippets: Ironbird.ModelRow<T>?
+	private let snippetMode: IronbirdModelSearchOptions<T>.SnippetMode
+	private let rowid: Ironbird.Value
 
 	/// Merge results from multiple searches.
 	/// - Parameter results: A list of result arrays.
@@ -179,7 +179,7 @@ public struct BlackbirdModelSearchResult<T: BlackbirdModel>: Identifiable, Senda
 
 		// Create array with only the first copy of each rowid, which will now have the highest score
 		var mergedResults: [Self] = []
-		var rowids = Set<Blackbird.Value>()
+		var rowids = Set<Ironbird.Value>()
 		for result in allResults {
 			let (inserted, _) = rowids.insert(result.rowid)
 			if inserted { mergedResults.append(result) }
@@ -191,10 +191,10 @@ public struct BlackbirdModelSearchResult<T: BlackbirdModel>: Identifiable, Senda
 		return mergedResults
 	}
 
-	/// The preloaded instance for this search result if ``BlackbirdModelSearchOptions`` specified `preloadInstances` for the search query.
+	/// The preloaded instance for this search result if ``IronbirdModelSearchOptions`` specified `preloadInstances` for the search query.
 	public let preloadedInstance: T?
 
-	init(highlights: Blackbird.ModelRow<T>?, highlightMode: BlackbirdModelSearchOptions<T>.HighlightMode, snippets: Blackbird.ModelRow<T>?, snippetMode: BlackbirdModelSearchOptions<T>.SnippetMode, rowid: Blackbird.Value, score: Double, preloadedInstance: T?) {
+	init(highlights: Ironbird.ModelRow<T>?, highlightMode: IronbirdModelSearchOptions<T>.HighlightMode, snippets: Ironbird.ModelRow<T>?, snippetMode: IronbirdModelSearchOptions<T>.SnippetMode, rowid: Ironbird.Value, score: Double, preloadedInstance: T?) {
 		self.highlights = highlights
 		self.highlightMode = highlightMode
 		self.snippets = snippets
@@ -205,37 +205,37 @@ public struct BlackbirdModelSearchResult<T: BlackbirdModel>: Identifiable, Senda
 	}
 
 	/// The full model instance for this search result.
-	/// - Parameter database: The ``Blackbird/Database`` to read from.
+	/// - Parameter database: The ``Ironbird/Database`` to read from.
 	/// - Returns: The specified instance, or `nil` if it no longer exists in the database.
-	public func instance(from database: Blackbird.Database) async throws -> T? {
+	public func instance(from database: Ironbird.Database) async throws -> T? {
 		if let preloadedInstance { return preloadedInstance }
 		return try await self.instanceIsolated(from: database, core: database.core)
 	}
 
 	/// Synchronous version of ``instance(from:)`` for use in database transactions.
-	public func instanceIsolated(from database: Blackbird.Database, core: isolated Blackbird.Database.Core) throws -> T? {
+	public func instanceIsolated(from database: Ironbird.Database, core: isolated Ironbird.Database.Core) throws -> T? {
 		if let preloadedInstance { return preloadedInstance }
 		return try T.readIsolated(from: database, core: core, sqlWhere: "rowid = ?", arguments: [self.rowid]).first
 	}
 
 	/// A subset of columns from this search result's model row.
 	/// - Parameters:
-	///   - database: The ``Blackbird/Database`` to read from.
+	///   - database: The ``Ironbird/Database`` to read from.
 	///   - columns: The column key-paths to select.
-	/// - Returns: A ``Blackbird/ModelRow`` of the model's type with only the specified columns present.
-	public func row(from database: Blackbird.Database, columns: [T.BlackbirdColumnKeyPath]) async throws -> Blackbird.ModelRow<T>? {
+	/// - Returns: A ``Ironbird/ModelRow`` of the model's type with only the specified columns present.
+	public func row(from database: Ironbird.Database, columns: [T.IronbirdColumnKeyPath]) async throws -> Ironbird.ModelRow<T>? {
 		try await self.rowIsolated(from: database, core: database.core, columns: columns)
 	}
 
 	/// Synchronous version of ``row(from:columns:)`` for use in database transactions.
-	public func rowIsolated(from database: Blackbird.Database, core: isolated Blackbird.Database.Core, columns: [T.BlackbirdColumnKeyPath]) throws -> Blackbird.ModelRow<T>? {
+	public func rowIsolated(from database: Ironbird.Database, core: isolated Ironbird.Database.Core, columns: [T.IronbirdColumnKeyPath]) throws -> Ironbird.ModelRow<T>? {
 		try T.queryIsolated(in: database, core: core, columns: columns, matching: .literal("rowid = ?", self.rowid)).first
 	}
 
 	/// The text of the given column, with the highlighting prefix and suffix strings, if this column matched the search query.
 	/// - Parameter column: The desired column key-path.
 	/// - Returns: The source text with matches surrounded by the highlight prefix and suffix strings, or `nil` if highlights were not generated by the search.
-	public func highlighted(_ column: T.BlackbirdColumnKeyPath) -> String? {
+	public func highlighted(_ column: T.IronbirdColumnKeyPath) -> String? {
 		if case .generate = self.highlightMode, let text = highlights?.value(keyPath: column)?.stringValue {
 			return text
 		} else {
@@ -246,7 +246,7 @@ public struct BlackbirdModelSearchResult<T: BlackbirdModel>: Identifiable, Senda
 	/// A snippet of matching text, with the snippet-highlighting prefix and suffix strings, if this column matched the search query.
 	/// - Parameter column: The desired column key-path.
 	/// - Returns: The snippet of matching text with matches surrounded by the snippet prefix and suffix strings, or `nil` if this column didn't match the query or snippets were not generated by the search.
-	public func snippet(_ column: T.BlackbirdColumnKeyPath) -> String? {
+	public func snippet(_ column: T.IronbirdColumnKeyPath) -> String? {
 		if case .generate(_, let prefix, let suffix, _) = snippetMode, let text = snippets?.value(keyPath: column)?.stringValue, text.contains(prefix), text.contains(suffix) {
 			return text
 		} else {
@@ -259,7 +259,7 @@ public struct BlackbirdModelSearchResult<T: BlackbirdModel>: Identifiable, Senda
 	///   - column: The desired column key-path.
 	///   - matchAttributes: The attributes to apply to matching substrings.
 	/// - Returns: The source text with matches having the given attributes, or `nil` if highlights were not generated by the search.
-	public func highlighted(_ column: T.BlackbirdColumnKeyPath, matchAttributes: AttributeContainer) -> AttributedString? {
+	public func highlighted(_ column: T.IronbirdColumnKeyPath, matchAttributes: AttributeContainer) -> AttributedString? {
 		guard case .generate(let prefix, let suffix) = highlightMode, let text = highlights?.value(keyPath: column)?.stringValue else { return nil }
 		return self.higlightedText(text, prefix: prefix, suffix: suffix, matchAttributes: matchAttributes)
 	}
@@ -269,7 +269,7 @@ public struct BlackbirdModelSearchResult<T: BlackbirdModel>: Identifiable, Senda
 	///   - column: The desired column key-path.
 	///   - matchAttributes: The attributes to apply to matching substrings.
 	/// - Returns: The snippet of matching text with matches having the given attributes, or `nil` if this column didn't match the query or snippets were not generated by the search.
-	public func snippet(_ column: T.BlackbirdColumnKeyPath, matchAttributes: AttributeContainer) -> AttributedString? {
+	public func snippet(_ column: T.IronbirdColumnKeyPath, matchAttributes: AttributeContainer) -> AttributedString? {
 		guard case .generate(_, let prefix, let suffix, _) = snippetMode, let text = snippets?.value(keyPath: column)?.stringValue, text.contains(prefix), text.contains(suffix) else { return nil }
 		return self.higlightedText(text, prefix: prefix, suffix: suffix, matchAttributes: matchAttributes)
 	}
@@ -293,7 +293,7 @@ public struct BlackbirdModelSearchResult<T: BlackbirdModel>: Identifiable, Senda
 }
 
 /// How a full-text-search query should be escaped or processed.
-public enum BlackbirdFullTextQuerySyntaxMode: Sendable {
+public enum IronbirdFullTextQuerySyntaxMode: Sendable {
 	/// The query will be passed directly to SQLite, supporting [the complete FTS5 complete syntax](https://sqlite.org/fts5.html#full_text_query_syntax).
 	case allowFullQuerySyntax
 
@@ -305,26 +305,26 @@ public enum BlackbirdFullTextQuerySyntaxMode: Sendable {
 	case escapeQuerySyntaxAndPrefixMatchLastPhrase
 }
 
-fileprivate struct BlackbirdFullTextQuerySyntaxPhrase {
+fileprivate struct IronbirdFullTextQuerySyntaxPhrase {
 	let phrase: String
 	let wasQuoted: Bool
 }
 
-public extension BlackbirdModel {
-	typealias SearchResult = BlackbirdModelSearchResult<Self>
+public extension IronbirdModel {
+	typealias SearchResult = IronbirdModelSearchResult<Self>
 
 	/// Consolidate the full-text index into an optimized structure for fastest querying.
 	///
 	/// This is a heavy operation that may take noticeable time on large indexes.
-	static func optimizeFullTextIndex(in database: Blackbird.Database) async throws {
+	static func optimizeFullTextIndex(in database: Ironbird.Database) async throws {
 		try await self.optimizeFullTextIndexIsolated(in: database, core: database.core)
 	}
 
 	/// Synchronous version of ``optimizeFullTextIndex(in:)``.
-	static func optimizeFullTextIndexIsolated(in database: Blackbird.Database, core: isolated Blackbird.Database.Core) throws {
+	static func optimizeFullTextIndexIsolated(in database: Ironbird.Database, core: isolated Ironbird.Database.Core) throws {
 		if Self.fullTextSearchableColumns.isEmpty { return }
 
-		let ftsTable = Blackbird.Table.FullTextIndexSchema.ftsTableName(Self.tableName)
+		let ftsTable = Ironbird.Table.FullTextIndexSchema.ftsTableName(Self.tableName)
 		try core.query("INSERT INTO `\(ftsTable)`(`\(ftsTable)`) VALUES ('optimize')")
 		try core.query("PRAGMA wal_checkpoint(TRUNCATE)")
 		try core.query("PRAGMA incremental_vacuum(16)")
@@ -336,20 +336,20 @@ public extension BlackbirdModel {
 	///   - matching: The expression to match. For instance, `.match("tech")`
 	///   - limit: Return at most this many results. If unspecified or `nil`, all matching results are returned.
 	///   - options: Options for this search.
-	/// - Returns: The matching set of ``BlackbirdModelSearchResult`` objects.
+	/// - Returns: The matching set of ``IronbirdModelSearchResult`` objects.
 	///
-	/// This requires that this model has at least one total column, and all columns referenced in the `matching` argument, specified in ``BlackbirdModel/fullTextSearchableColumns``.
-	static func fullTextSearch(from database: Blackbird.Database, matching: BlackbirdModelColumnExpression<Self>, limit: Int? = nil, options: BlackbirdModelSearchOptions<Self> = .init()) async throws -> [Self.SearchResult] {
+	/// This requires that this model has at least one total column, and all columns referenced in the `matching` argument, specified in ``IronbirdModel/fullTextSearchableColumns``.
+	static func fullTextSearch(from database: Ironbird.Database, matching: IronbirdModelColumnExpression<Self>, limit: Int? = nil, options: IronbirdModelSearchOptions<Self> = .init()) async throws -> [Self.SearchResult] {
 		try await self.fullTextSearchIsolated(from: database, core: database.core, matching: matching, limit: limit, options: options)
 	}
 
 	/// Synchronous version of ``fullTextSearch(from:matching:limit:options:)``.
-	static func fullTextSearchIsolated(from database: Blackbird.Database, core: isolated Blackbird.Database.Core, matching: BlackbirdModelColumnExpression<Self>, limit: Int? = nil, options: BlackbirdModelSearchOptions<Self> = .init()) throws -> [Self.SearchResult] {
+	static func fullTextSearchIsolated(from database: Ironbird.Database, core: isolated Ironbird.Database.Core, matching: IronbirdModelColumnExpression<Self>, limit: Int? = nil, options: IronbirdModelSearchOptions<Self> = .init()) throws -> [Self.SearchResult] {
 		let decoded = DecodedStructuredFTSQuery<Self>(matching: matching, options: options, limit: limit)
 		return try decoded.query(in: database, core: core, scoreMultiplier: options.scoreMultiple)
 	}
 
-	internal static func fullTextQueryEscape(_ query: String, mode: BlackbirdFullTextQuerySyntaxMode) -> String {
+	internal static func fullTextQueryEscape(_ query: String, mode: IronbirdFullTextQuerySyntaxMode) -> String {
 		if mode == .allowFullQuerySyntax { return query }
 
 		let tokenCharacters = CharacterSet.whitespacesAndNewlines.inverted
@@ -359,13 +359,13 @@ public extension BlackbirdModel {
 
 		var isQuotedPhrase = false
 		var currentPhraseWasQuoted = false
-		var phrases: [BlackbirdFullTextQuerySyntaxPhrase] = []
+		var phrases: [IronbirdFullTextQuerySyntaxPhrase] = []
 		var currentPhraseWords: [String] = []
 
 		let endPhrase = {
 			let phrase = currentPhraseWords.joined(separator: " ")
 			if !phrase.isEmpty {
-				phrases.append(BlackbirdFullTextQuerySyntaxPhrase(phrase: phrase, wasQuoted: currentPhraseWasQuoted))
+				phrases.append(IronbirdFullTextQuerySyntaxPhrase(phrase: phrase, wasQuoted: currentPhraseWasQuoted))
 			}
 			currentPhraseWords.removeAll()
 			currentPhraseWasQuoted = false
@@ -396,24 +396,24 @@ public extension BlackbirdModel {
 	}
 }
 
-fileprivate struct DecodedStructuredFTSQuery<T: BlackbirdModel> {
+fileprivate struct DecodedStructuredFTSQuery<T: IronbirdModel> {
 	let query: String
 	let arguments: [Sendable]
-	let table: Blackbird.Table
-	let cacheKey: [Blackbird.Value]?
+	let table: Ironbird.Table
+	let cacheKey: [Ironbird.Value]?
 
 	let highlightColumnPrefix = "FTSHighlight"
 	let snippetColumnPrefix = "FTSSnippet"
 	let scoreColumnName = "FTS+Score"
 	let fieldNames: [String]
-	let options: BlackbirdModelSearchOptions<T>
+	let options: IronbirdModelSearchOptions<T>
 
-	init(matching: BlackbirdModelColumnExpression<T>, options: BlackbirdModelSearchOptions<T>, limit: Int?) {
+	init(matching: IronbirdModelColumnExpression<T>, options: IronbirdModelSearchOptions<T>, limit: Int?) {
 		self.options = options
 		self.table = SchemaGenerator.shared.table(for: T.self)
 
 		guard let fullTextIndex = table.fullTextIndex else {
-			fatalError("[Blackbird] \(String(describing: T.self)) does not define any fullTextSearchableColumns.")
+			fatalError("[Ironbird] \(String(describing: T.self)) does not define any fullTextSearchableColumns.")
 		}
 
 		for orderBy in options.orderBy {
@@ -423,9 +423,9 @@ fileprivate struct DecodedStructuredFTSQuery<T: BlackbirdModel> {
 			}
 		}
 
-		let ftsTableName = Blackbird.Table.FullTextIndexSchema.ftsTableName(T.tableName)
+		let ftsTableName = Ironbird.Table.FullTextIndexSchema.ftsTableName(T.tableName)
 		var clauses: [String] = []
-		var arguments: [Blackbird.Value] = []
+		var arguments: [Ironbird.Value] = []
 
 		self.fieldNames = fullTextIndex.sortedFieldNames
 		let fieldWeights = self.fieldNames.map { fullTextIndex.fields[$0]?.weight ?? 0.0 }
@@ -480,13 +480,13 @@ fileprivate struct DecodedStructuredFTSQuery<T: BlackbirdModel> {
 		self.query = "\(selectClause) FROM `\(ftsTableName)` \(clauses.joined(separator: " "))"
 		self.arguments = arguments
 
-		var cacheKey = [Blackbird.Value.text(self.query)]
+		var cacheKey = [Ironbird.Value.text(self.query)]
 		cacheKey.append(contentsOf: arguments)
 		self.cacheKey = cacheKey
 	}
 
-	func query(in database: Blackbird.Database, core: isolated Blackbird.Database.Core, scoreMultiplier: Double) throws -> [BlackbirdModelSearchResult<T>] {
-		var results: [BlackbirdModelSearchResult<T>] = []
+	func query(in database: Ironbird.Database, core: isolated Ironbird.Database.Core, scoreMultiplier: Double) throws -> [IronbirdModelSearchResult<T>] {
+		var results: [IronbirdModelSearchResult<T>] = []
 		for row in try T.queryIsolated(in: database, core: core, self.query, arguments: self.arguments) {
 			if let result = try result(database: database, core: core, ftsRow: row, scoreMultiplier: scoreMultiplier) {
 				results.append(result)
@@ -495,14 +495,14 @@ fileprivate struct DecodedStructuredFTSQuery<T: BlackbirdModel> {
 		return results
 	}
 
-	private func result(database: Blackbird.Database, core: isolated Blackbird.Database.Core, ftsRow: Blackbird.ModelRow<T>, scoreMultiplier: Double) throws -> BlackbirdModelSearchResult<T>? {
+	private func result(database: Ironbird.Database, core: isolated Ironbird.Database.Core, ftsRow: Ironbird.ModelRow<T>, scoreMultiplier: Double) throws -> IronbirdModelSearchResult<T>? {
 		guard let rowid = ftsRow["rowid"], let score = ftsRow[scoreColumnName] else {
 			fatalError("Unexpected result row format from FTS query on \(String(describing: T.self)) (missing rowid or score)")
 		}
 
 		var idx = 0
-		var highlightRow: [String: Blackbird.Value] = [:]
-		var snippetRow: [String: Blackbird.Value] = [:]
+		var highlightRow: [String: Ironbird.Value] = [:]
+		var snippetRow: [String: Ironbird.Value] = [:]
 		for fieldName in self.fieldNames {
 			if let highlight = ftsRow["\(highlightColumnPrefix)+\(idx)"] {
 				highlightRow[fieldName] = highlight
@@ -515,11 +515,11 @@ fileprivate struct DecodedStructuredFTSQuery<T: BlackbirdModel> {
 		}
 
 		let preloadedInstance = try options.preloadInstances ? T.readIsolated(from: database, core: core, sqlWhere: "rowid = ?", arguments: [rowid]).first : nil
-		return BlackbirdModelSearchResult<T>(highlights: .init(highlightRow, table: self.table), highlightMode: self.options.highlights, snippets: .init(snippetRow, table: self.table), snippetMode: self.options.snippets, rowid: rowid, score: (score.doubleValue ?? 0) * scoreMultiplier, preloadedInstance: preloadedInstance)
+		return IronbirdModelSearchResult<T>(highlights: .init(highlightRow, table: self.table), highlightMode: self.options.highlights, snippets: .init(snippetRow, table: self.table), snippetMode: self.options.snippets, rowid: rowid, score: (score.doubleValue ?? 0) * scoreMultiplier, preloadedInstance: preloadedInstance)
 	}
 }
 
-extension Blackbird.Table {
+extension Ironbird.Table {
 	struct FullTextIndexSchema: Equatable, Hashable {
 		static let defaultTokenizer = "porter unicode61 remove_diacritics 2"
 
@@ -530,7 +530,7 @@ extension Blackbird.Table {
 		}
 
 		let contentTableName: String
-		let fields: [String: BlackbirdModelFullTextSearchableColumn]
+		let fields: [String: IronbirdModelFullTextSearchableColumn]
 		let tokenizer: String
 
 		var sortedFieldNames: [String] { self.fields.keys.sorted { $0 < $1 } }
@@ -548,11 +548,11 @@ extension Blackbird.Table {
 			return "CREATE VIRTUAL TABLE `\(Self.ftsTableName(self.contentTableName))` USING fts5(\(fieldDefinitions.joined(separator: ",")),content=`\(self.contentTableName)`,tokenize='\(self.tokenizer)')"
 		}
 
-		static func ftsTableExists(core: isolated Blackbird.Database.Core, contentTableName: String) throws -> Bool {
+		static func ftsTableExists(core: isolated Ironbird.Database.Core, contentTableName: String) throws -> Bool {
 			!(try core.query("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?", arguments: [self.ftsTableName(contentTableName)])).isEmpty
 		}
 
-		func recreateTriggers(core: isolated Blackbird.Database.Core) throws {
+		func recreateTriggers(core: isolated Ironbird.Database.Core) throws {
 			let insertTriggerName = Self.insertTriggerName(self.contentTableName)
 			let updateTriggerName = Self.updateTriggerName(self.contentTableName)
 			let deleteTriggerName = Self.deleteTriggerName(self.contentTableName)
@@ -588,7 +588,7 @@ extension Blackbird.Table {
 			""")
 		}
 
-		func rebuild(core: isolated Blackbird.Database.Core) throws {
+		func rebuild(core: isolated Ironbird.Database.Core) throws {
 			let ftsTableName = Self.ftsTableName(self.contentTableName)
 			try core.query("DROP TABLE IF EXISTS `\(ftsTableName)`")
 			try core.query(self.ftsTableDefinition)
@@ -596,7 +596,7 @@ extension Blackbird.Table {
 			try core.query("INSERT INTO `\(ftsTableName)`(`\(ftsTableName)`) VALUES('rebuild')")
 		}
 
-		func needsRebuild(core: isolated Blackbird.Database.Core) throws -> Bool {
+		func needsRebuild(core: isolated Ironbird.Database.Core) throws -> Bool {
 			let ftsTableName = Self.ftsTableName(self.contentTableName)
 			let createdWithSQL = try core.query("SELECT sql FROM sqlite_master WHERE name = '\(ftsTableName)'").first?["sql"]?.stringValue ?? ""
 			if createdWithSQL != self.ftsTableDefinition { return true }
@@ -611,8 +611,8 @@ extension Blackbird.Table {
 				!triggerNames.contains(Self.deleteTriggerName(self.contentTableName))
 		}
 
-		init(contentTableName: String, fields: [String: BlackbirdModelFullTextSearchableColumn], tokenizer: String? = nil) {
-			guard sqlite3_compileoption_used("ENABLE_FTS5") != 0 else { fatalError("[Blackbird] SQLite was compiled without FTS5 support, but a full-text index is specified on table `\(contentTableName)`") }
+		init(contentTableName: String, fields: [String: IronbirdModelFullTextSearchableColumn], tokenizer: String? = nil) {
+			guard sqlite3_compileoption_used("ENABLE_FTS5") != 0 else { fatalError("[Ironbird] SQLite was compiled without FTS5 support, but a full-text index is specified on table `\(contentTableName)`") }
 			guard !fields.isEmpty else { fatalError("No columns specified") }
 			self.contentTableName = contentTableName
 			self.fields = fields

@@ -37,14 +37,14 @@ import Semaphore
 import SQLite3
 import Synchronization
 
-public extension Blackbird {
+public extension Ironbird {
 	enum TransactionResult<R: Sendable>: Sendable {
 		case rolledBack
 		case committed(R)
 	}
 }
 
-protocol BlackbirdQueryable {
+protocol IronbirdQueryable {
 	/// Executes arbitrary SQL queries without returning a value.
 	///
 	/// - Parameter query: The SQL string to execute. May contain multiple queries separated by semicolons (`;`).
@@ -63,11 +63,11 @@ protocol BlackbirdQueryable {
 	/// - Parameters:
 	///     - action: The actions to perform in the transaction. If an error is thrown, the transaction is rolled back and the error is rethrown to the caller.
 	///
-	///         Use ``Blackbird/Database/cancellableTransaction(_:)`` to roll back transactions without throwing errors.
+	///         Use ``Ironbird/Database/cancellableTransaction(_:)`` to roll back transactions without throwing errors.
 	///
 	/// While inside the transaction's `action`:
-	/// * Queries against the isolated ``Blackbird/Database/Core`` can be executed synchronously (using `try` instead of `try await`).
-	/// * Change notifications for this database via ``Blackbird/ChangeSequence`` are queued until the transaction is completed. When delivered, multiple changes for the same table are consolidated into a single notification with every affected primary-key value.
+	/// * Queries against the isolated ``Ironbird/Database/Core`` can be executed synchronously (using `try` instead of `try await`).
+	/// * Change notifications for this database via ``Ironbird/ChangeSequence`` are queued until the transaction is completed. When delivered, multiple changes for the same table are consolidated into a single notification with every affected primary-key value.
 	///
 	///     __Note:__ Notifications may be sent for changes occurring during the transaction even if the transaction is rolled back.
 	///
@@ -84,16 +84,16 @@ protocol BlackbirdQueryable {
 	/// > Performing large quantities of database writes is typically much faster inside a transaction.
 	///
 	/// ## See also
-	/// ``Blackbird/Database/cancellableTransaction(_:)``
+	/// ``Ironbird/Database/cancellableTransaction(_:)``
 	@discardableResult
-	func transaction<R: Sendable>(_ action: (@Sendable (_ core: isolated Blackbird.Database.Core) async throws -> R)) async throws -> R
+	func transaction<R: Sendable>(_ action: (@Sendable (_ core: isolated Ironbird.Database.Core) async throws -> R)) async throws -> R
 
-	/// Equivalent to ``Blackbird/Database/transaction(_:)``, but with the ability to cancel.
-	/// - Parameter action: The actions to perform in the transaction. Throw ``Blackbird/Error/cancelTransaction`` within the action to cancel and roll back the transaction. This error will not be rethrown.
+	/// Equivalent to ``Ironbird/Database/transaction(_:)``, but with the ability to cancel.
+	/// - Parameter action: The actions to perform in the transaction. Throw ``Ironbird/Error/cancelTransaction`` within the action to cancel and roll back the transaction. This error will not be rethrown.
 	///
 	/// If any other error is thrown, the transaction is rolled back and the error is rethrown to the caller.
 	///
-	/// See ``Blackbird/Database/transaction(_:)`` for details.
+	/// See ``Ironbird/Database/transaction(_:)`` for details.
 	///
 	/// ## Example
 	/// ```swift
@@ -108,7 +108,7 @@ protocol BlackbirdQueryable {
 	/// }
 	/// ```
 	@discardableResult
-	func cancellableTransaction<R: Sendable>(_ action: (@Sendable (_ core: isolated Blackbird.Database.Core) async throws -> R)) async throws -> Blackbird.TransactionResult<R>
+	func cancellableTransaction<R: Sendable>(_ action: (@Sendable (_ core: isolated Ironbird.Database.Core) async throws -> R)) async throws -> Ironbird.TransactionResult<R>
 
 	/// Queries the database.
 	/// - Parameter query: An SQL query.
@@ -118,7 +118,7 @@ protocol BlackbirdQueryable {
 	/// ```swift
 	/// let ids = try await db.query("SELECT id FROM posts WHERE state = 1")
 	/// ```
-	@discardableResult func query(_ query: String) async throws -> [Blackbird.Row]
+	@discardableResult func query(_ query: String) async throws -> [Ironbird.Row]
 
 	/// Queries the database with an optional list of arguments.
 	/// - Parameters:
@@ -134,7 +134,7 @@ protocol BlackbirdQueryable {
 	///     "Test Title" // value for title
 	/// )
 	/// ```
-	@discardableResult func query(_ query: String, _ arguments: Sendable...) async throws -> [Blackbird.Row]
+	@discardableResult func query(_ query: String, _ arguments: Sendable...) async throws -> [Ironbird.Row]
 
 	/// Queries the database with an array of arguments.
 	/// - Parameters:
@@ -149,7 +149,7 @@ protocol BlackbirdQueryable {
 	///     arguments: [1 /* value for state */, "Test Title" /* value for title */]
 	/// )
 	/// ```
-	@discardableResult func query(_ query: String, arguments: [Sendable]) async throws -> [Blackbird.Row]
+	@discardableResult func query(_ query: String, arguments: [Sendable]) async throws -> [Ironbird.Row]
 
 	/// Queries the database using a dictionary of named arguments.
 	///
@@ -165,10 +165,10 @@ protocol BlackbirdQueryable {
 	///     arguments: [":state": 1, ":title": "Test Title"]
 	/// )
 	/// ```
-	@discardableResult func query(_ query: String, arguments: [String: Sendable]) async throws -> [Blackbird.Row]
+	@discardableResult func query(_ query: String, arguments: [String: Sendable]) async throws -> [Ironbird.Row]
 }
 
-public extension Blackbird {
+public extension Ironbird {
 	/// A managed SQLite database.
 	///
 	/// A lightweight wrapper around [SQLite](https://www.sqlite.org/).
@@ -177,7 +177,7 @@ public extension Blackbird {
 	/// The database is accessed primarily via `async` calls, internally using an `actor` for performance, concurrency, and isolation.
 	///
 	/// ```swift
-	/// let db = try Blackbird.Database(path: "/tmp/test.sqlite")
+	/// let db = try Ironbird.Database(path: "/tmp/test.sqlite")
 	///
 	/// // SELECT with structured arguments and returned rows
 	/// for row in try await db.query("SELECT id FROM posts WHERE state = ?", 1) {
@@ -200,7 +200,7 @@ public extension Blackbird {
 	/// }
 	/// ```
 	///
-	final class Database: Identifiable, Hashable, Equatable, BlackbirdQueryable, Sendable {
+	final class Database: Identifiable, Hashable, Equatable, IronbirdQueryable, Sendable {
 		/// Process-unique identifiers for Database instances. Used internally.
 		public typealias InstanceID = Int64
 
@@ -232,7 +232,7 @@ public extension Blackbird {
 
 			static let inMemoryDatabase = Options(rawValue: 1 << 0)
 
-			/// Sets the database to read-only. Any calls to ``BlackbirdModel`` write functions with a read-only database will terminate with a fatal error.
+			/// Sets the database to read-only. Any calls to ``IronbirdModel`` write functions with a read-only database will terminate with a fatal error.
 			public static let readOnly = Options(rawValue: 1 << 1)
 
 			/// Monitor for changes to the database file from outside of this connection, such as from a different process or a different SQLite library within the same process.
@@ -244,34 +244,34 @@ public extension Blackbird {
 			/// When using ``debugPrintEveryQuery``, parameterized query values will be included in the logged query strings instead of their placeholders. Useful for debugging.
 			public static let debugPrintQueryParameterValues = Options(rawValue: 1 << 4)
 
-			/// Logs every change reported by ``Blackbird/ChangeSequence`` instances for this database. Useful for debugging.
+			/// Logs every change reported by ``Ironbird/ChangeSequence`` instances for this database. Useful for debugging.
 			public static let debugPrintEveryReportedChange = Options(rawValue: 1 << 5)
 
 			/// Logs cache hits and misses. Useful for debugging.
 			public static let debugPrintCacheActivity = Options(rawValue: 1 << 6)
 
-			/// Require the calling of ``BlackbirdModel/resolveSchema(in:)`` before any queries to a `BlackbirdModel` type.
+			/// Require the calling of ``IronbirdModel/resolveSchema(in:)`` before any queries to a `IronbirdModel` type.
 			///
-			/// Without this option, schema validation and any needed migrations are performed upon the first query to a ``BlackbirdModel`` type.
+			/// Without this option, schema validation and any needed migrations are performed upon the first query to a ``IronbirdModel`` type.
 			/// This is convenient, but has downsides:
 			///
 			/// - Schema migrations occurring at unpredictable times may cause unpredictable performance.
 			/// - The callsite for failed validations or schema migrations is unpredictable, making it difficult to build recovery logic.
-			/// - If using multiple ``Blackbird/Database`` instances, subtle bugs may be introduced if a ``BlackbirdModel`` is inadvertently queried with the wrong database.
+			/// - If using multiple ``Ironbird/Database`` instances, subtle bugs may be introduced if a ``IronbirdModel`` is inadvertently queried with the wrong database.
 			///
-			/// With this option set, any ``BlackbirdModel`` type must first call ``BlackbirdModel/resolveSchema(in:)`` before any queries are performed against it for this database.
+			/// With this option set, any ``IronbirdModel`` type must first call ``IronbirdModel/resolveSchema(in:)`` before any queries are performed against it for this database.
 			///
-			/// If any queries are performed without first having called ``BlackbirdModel/resolveSchema(in:)``, a fatal error occurs.
+			/// If any queries are performed without first having called ``IronbirdModel/resolveSchema(in:)``, a fatal error occurs.
 			///
 			/// In addition to creating more predictable performance, this is useful to enforce the consolidation of schema validation and migrations to database-opening time so the caller can take appropriate action.
 			///
 			/// ## Example
 			/// ```swift
 			/// do {
-			///     let db = try Blackbird.Database(path: …, options: [.requireModelSchemaValidationBeforeUse])
+			///     let db = try Ironbird.Database(path: …, options: [.requireModelSchemaValidationBeforeUse])
 			///
 			///     for modelType in [
-			///         // List all BlackbirdModel types to be used with this database:
+			///         // List all IronbirdModel types to be used with this database:
 			///         Author.self,
 			///         Post.self,
 			///         Genre.self,
@@ -282,7 +282,7 @@ public extension Blackbird {
 			/// } catch {
 			///     // Perform appropriate recovery actions, such as
 			///     //  deleting the database file so it can be recreated:
-			///     try? Blackbird.Database.delete(atPath: …)
+			///     try? Ironbird.Database.delete(atPath: …)
 			/// }
 			/// ```
 			public static let requireModelSchemaValidationBeforeUse = Options(rawValue: 1 << 7)
@@ -367,7 +367,7 @@ public extension Blackbird {
 		/// An error will be thrown if another instance exists with the same filename, the database cannot be created, or the linked version of SQLite lacks the required capabilities.
 		public init(path: String, options: Options = []) throws {
 			// Use a local because we can't use self until everything has been initalized
-			let performanceLog = PerformanceLogger(subsystem: Blackbird.loggingSubsystem, category: "Database")
+			let performanceLog = PerformanceLogger(subsystem: Ironbird.loggingSubsystem, category: "Database")
 			let spState = performanceLog.begin(signpost: .openDatabase)
 			defer { performanceLog.end(state: spState) }
 
@@ -449,7 +449,7 @@ public extension Blackbird {
 		///
 		/// Optional. If not called, databases automatically close when deallocated.
 		///
-		/// This is useful if actions must be taken after the database is definitely closed, such as moving it, deleting it, or instantiating another ``Blackbird/Database`` instance for the same file.
+		/// This is useful if actions must be taken after the database is definitely closed, such as moving it, deleting it, or instantiating another ``Ironbird/Database`` instance for the same file.
 		///
 		/// Sending any queries to a closed database throws an error.
 		public func close() async {
@@ -470,15 +470,15 @@ public extension Blackbird {
 		public func transaction<R: Sendable>(_ action: (@Sendable (_ core: isolated Core) async throws -> R)) async throws -> R { try await self.core.transaction(action) }
 
 		@discardableResult
-		public func cancellableTransaction<R: Sendable>(_ action: (@Sendable (_ core: isolated Core) async throws -> R)) async throws -> Blackbird.TransactionResult<R> { try await self.core.cancellableTransaction(action) }
+		public func cancellableTransaction<R: Sendable>(_ action: (@Sendable (_ core: isolated Core) async throws -> R)) async throws -> Ironbird.TransactionResult<R> { try await self.core.cancellableTransaction(action) }
 
-		@discardableResult public func query(_ query: String) async throws -> [Blackbird.Row] { try await self.core.query(query, [Sendable]()) }
+		@discardableResult public func query(_ query: String) async throws -> [Ironbird.Row] { try await self.core.query(query, [Sendable]()) }
 
-		@discardableResult public func query(_ query: String, _ arguments: Sendable...) async throws -> [Blackbird.Row] { try await self.core.query(query, arguments) }
+		@discardableResult public func query(_ query: String, _ arguments: Sendable...) async throws -> [Ironbird.Row] { try await self.core.query(query, arguments) }
 
-		@discardableResult public func query(_ query: String, arguments: [Sendable]) async throws -> [Blackbird.Row] { try await self.core.query(query, arguments) }
+		@discardableResult public func query(_ query: String, arguments: [Sendable]) async throws -> [Ironbird.Row] { try await self.core.query(query, arguments) }
 
-		@discardableResult public func query(_ query: String, arguments: [String: Sendable]) async throws -> [Blackbird.Row] { try await self.core.query(query, arguments: arguments) }
+		@discardableResult public func query(_ query: String, arguments: [String: Sendable]) async throws -> [Ironbird.Row] { try await self.core.query(query, arguments: arguments) }
 
 		public func setArtificialQueryDelay(_ delay: TimeInterval?) async { await self.core.setArtificialQueryDelay(delay) }
 
@@ -494,14 +494,14 @@ public extension Blackbird {
 		// MARK: - Core
 
 		/// An actor for protected concurrent access to a database.
-		public actor Core: BlackbirdQueryable {
+		public actor Core: IronbirdQueryable {
 			private struct PreparedStatement {
 				let handle: SQLiteStatementHandle
 				let isReadOnly: Bool
 			}
 
-			private static let queryLogger = Logger.with(subsystem: Blackbird.loggingSubsystem, category: "DatabaseQuery")
-			private static let generalLogger = Logger.with(subsystem: Blackbird.loggingSubsystem, category: "DatabaseGeneral")
+			private static let queryLogger = Logger.with(subsystem: Ironbird.loggingSubsystem, category: "DatabaseQuery")
+			private static let generalLogger = Logger.with(subsystem: Ironbird.loggingSubsystem, category: "DatabaseGeneral")
 
 			private var debugPrintEveryQuery = false
 			private var debugPrintQueryParameterValues = false
@@ -517,7 +517,7 @@ public extension Blackbird {
 			private var dataVersionStmt: OpaquePointer?
 			private var previousDataVersion: Int64 = 0
 
-			private var perfLog = PerformanceLogger(subsystem: Blackbird.loggingSubsystem, category: "Database.Core")
+			private var perfLog = PerformanceLogger(subsystem: Ironbird.loggingSubsystem, category: "Database.Core")
 
 			init(_ dbHandle: SQLiteDBHandle, changeReporter: ChangeReporter?, cache: Cache?, fileChangeMonitor: FileChangeMonitor?, options: Database.Options) {
 				self.dbHandle = dbHandle
@@ -587,7 +587,7 @@ public extension Blackbird {
 			}
 
 			// Exactly like the function below, but accepts an async action
-			public func transaction<R: Sendable>(_ action: (@Sendable (_ core: isolated Blackbird.Database.Core) async throws -> R)) async throws -> R {
+			public func transaction<R: Sendable>(_ action: (@Sendable (_ core: isolated Ironbird.Database.Core) async throws -> R)) async throws -> R {
 				let result = try await cancellableTransaction { core in
 					try await action(core)
 				}
@@ -599,7 +599,7 @@ public extension Blackbird {
 			}
 
 			// Exactly like the function above, but requires action to be synchronous
-			public func transaction<R: Sendable>(_ action: (@Sendable (_ core: isolated Blackbird.Database.Core) throws -> R)) throws -> R {
+			public func transaction<R: Sendable>(_ action: (@Sendable (_ core: isolated Ironbird.Database.Core) throws -> R)) throws -> R {
 				let result = try cancellableTransaction { core in
 					try action(core)
 				}
@@ -613,7 +613,7 @@ public extension Blackbird {
 			private let asyncTransactionSemaphore = AsyncSemaphore(value: 1)
 
 			// Exactly like the function below, but accepts an async action
-			public func cancellableTransaction<R: Sendable>(_ action: (@Sendable (_ core: isolated Blackbird.Database.Core) async throws -> R)) async throws -> Blackbird.TransactionResult<R> {
+			public func cancellableTransaction<R: Sendable>(_ action: (@Sendable (_ core: isolated Ironbird.Database.Core) async throws -> R)) async throws -> Ironbird.TransactionResult<R> {
 				await self.asyncTransactionSemaphore.wait()
 				defer { asyncTransactionSemaphore.signal() }
 
@@ -636,7 +636,7 @@ public extension Blackbird {
 					let result: R = try await action(self)
 					try execute("RELEASE SAVEPOINT \"\(transactionID)\"")
 					return .committed(result)
-				} catch Blackbird.Error.cancelTransaction {
+				} catch Ironbird.Error.cancelTransaction {
 					try self.execute("ROLLBACK TO SAVEPOINT \"\(transactionID)\"")
 					self.cache?.invalidate()
 					return .rolledBack
@@ -648,7 +648,7 @@ public extension Blackbird {
 			}
 
 			// Exactly like the function above, but requires action to be synchronous
-			public func cancellableTransaction<R: Sendable>(_ action: (@Sendable (_ core: isolated Blackbird.Database.Core) throws -> R)) throws -> Blackbird.TransactionResult<R> {
+			public func cancellableTransaction<R: Sendable>(_ action: (@Sendable (_ core: isolated Ironbird.Database.Core) throws -> R)) throws -> Ironbird.TransactionResult<R> {
 				if self.isClosed { throw Error.databaseIsClosed }
 				let transactionID = self.nextTransactionID
 				self.nextTransactionID += 1
@@ -668,7 +668,7 @@ public extension Blackbird {
 					let result: R = try action(self)
 					try execute("RELEASE SAVEPOINT \"\(transactionID)\"")
 					return .committed(result)
-				} catch Blackbird.Error.cancelTransaction {
+				} catch Ironbird.Error.cancelTransaction {
 					try self.execute("ROLLBACK TO SAVEPOINT \"\(transactionID)\"")
 					self.cache?.invalidate()
 					return .rolledBack
@@ -737,13 +737,13 @@ public extension Blackbird {
 			}
 
 			@discardableResult
-			public func query(_ query: String) throws -> [Blackbird.Row] { try self.query(query, [Sendable]()) }
+			public func query(_ query: String) throws -> [Ironbird.Row] { try self.query(query, [Sendable]()) }
 
 			@discardableResult
-			public func query(_ query: String, _ arguments: Sendable...) throws -> [Blackbird.Row] { try self.query(query, arguments: arguments) }
+			public func query(_ query: String, _ arguments: Sendable...) throws -> [Ironbird.Row] { try self.query(query, arguments: arguments) }
 
 			@discardableResult
-			public func query(_ query: String, arguments: [Sendable]) throws -> [Blackbird.Row] {
+			public func query(_ query: String, arguments: [Sendable]) throws -> [Ironbird.Row] {
 				if self.isClosed { throw Error.databaseIsClosed }
 				let statement = try preparedStatement(query)
 				let statementHandle = statement.handle.pointer
@@ -760,7 +760,7 @@ public extension Blackbird {
 			}
 
 			@discardableResult
-			public func query(_ query: String, arguments: [String: Sendable]) throws -> [Blackbird.Row] {
+			public func query(_ query: String, arguments: [String: Sendable]) throws -> [Ironbird.Row] {
 				if self.isClosed { throw Error.databaseIsClosed }
 				let statement = try preparedStatement(query)
 				let statementHandle = statement.handle.pointer
@@ -785,7 +785,7 @@ public extension Blackbird {
 				return statement
 			}
 
-			private func rowsByExecutingPreparedStatement(_ statement: PreparedStatement, from query: String) throws -> [Blackbird.Row] {
+			private func rowsByExecutingPreparedStatement(_ statement: PreparedStatement, from query: String) throws -> [Ironbird.Row] {
 				if self.debugPrintEveryQuery {
 					if self.debugPrintQueryParameterValues, let cStr = sqlite3_expanded_sql(statement.handle.pointer), let expandedQuery = String(cString: cStr, encoding: .utf8) {
 						Self.queryLogger.debug("\(expandedQuery)")
@@ -839,9 +839,9 @@ public extension Blackbird {
 					columnNames.append(name)
 				}
 
-				var rows: [Blackbird.Row] = []
+				var rows: [Ironbird.Row] = []
 				while result == SQLITE_ROW {
-					var row: Blackbird.Row = [:]
+					var row: Ironbird.Row = [:]
 					for i in 0..<Int(columnCount) {
 						switch sqlite3_column_type(statementHandle, Int32(i)) {
 							case SQLITE_NULL: row[columnNames[i]] = .null
@@ -880,7 +880,7 @@ public extension Blackbird {
 
 			public func backup(to targetPath: String, pagesPerStep: Int32, printProgress: Bool = false) async throws {
 				guard !FileManager.default.fileExists(atPath: targetPath) else {
-					throw Blackbird.Database.Error.backupError(description: "File already exists at `\(targetPath)`")
+					throw Ironbird.Database.Error.backupError(description: "File already exists at `\(targetPath)`")
 				}
 
 				var rawTargetHandle: OpaquePointer? = nil
@@ -902,7 +902,7 @@ public extension Blackbird {
 				}
 
 				guard let backup = sqlite3_backup_init(targetDbHandle.pointer, "main", dbHandle.pointer, "main") else {
-					throw Blackbird.Database.Error.backupError(description: self.errorDesc(targetDbHandle))
+					throw Ironbird.Database.Error.backupError(description: self.errorDesc(targetDbHandle))
 				}
 
 				defer { sqlite3_backup_finish(backup) }
@@ -922,7 +922,7 @@ public extension Blackbird {
 				}
 
 				guard stepResult == SQLITE_DONE else {
-					throw Blackbird.Database.Error.backupError(description: self.errorDesc(targetDbHandle))
+					throw Ironbird.Database.Error.backupError(description: self.errorDesc(targetDbHandle))
 				}
 			}
 		}

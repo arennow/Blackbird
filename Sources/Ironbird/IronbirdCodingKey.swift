@@ -33,10 +33,10 @@
 
 import Foundation
 
-/// For BlackbirdModel to work with custom `CodingKeys`, their `CodingKeys` enum must be declared as: `enum CodingKeys: String, BlackbirdCodingKey`.
-public protocol BlackbirdCodingKey: RawRepresentable, CodingKey, CaseIterable where RawValue == String {}
+/// For IronbirdModel to work with custom `CodingKeys`, their `CodingKeys` enum must be declared as: `enum CodingKeys: String, IronbirdCodingKey`.
+public protocol IronbirdCodingKey: RawRepresentable, CodingKey, CaseIterable where RawValue == String {}
 
-extension BlackbirdCodingKey {
+extension IronbirdCodingKey {
 	static var allLabeledCases: [String: String] {
 		var columnsToKeys: [String: String] = [:]
 		for c in allCases {
@@ -60,7 +60,7 @@ extension BlackbirdCodingKey {
 	// So this hack, based on compiler internals that could break in the future, comes from:
 	//  https://forums.swift.org/t/getting-the-name-of-a-swift-enum-value/35654/18
 	//
-	// If it ever breaks, and no other method arrives to get those names, Blackbird can't support custom CodingKeys.
+	// If it ever breaks, and no other method arrives to get those names, Ironbird can't support custom CodingKeys.
 	//
 	@_silgen_name("swift_EnumCaseName") private static func _getEnumCaseNameInternal(_ value: some Any) -> UnsafePointer<CChar>?
 	fileprivate static func _getEnumCaseName(for value: some Any) -> String? {
