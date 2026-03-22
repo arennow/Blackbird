@@ -1,5 +1,6 @@
-// swift-tools-version: 6.0
+// swift-tools-version: 6.1
 
+import CompilerPluginSupport
 import PackageDescription
 
 let package = Package(name: "Ironbird",
@@ -12,11 +13,19 @@ let package = Package(name: "Ironbird",
 					  products: [
 					  	.library(name: "Ironbird",
 								   targets: ["Ironbird"]),
+					  	.library(name: "UUIDID",
+								   targets: ["UUIDID"]),
+					  ],
+					  traits: [
+					  	.default(enabledTraits: ["UUIDID"]),
+					  	.trait(name: "UUIDID"),
 					  ],
 					  dependencies: [
 					  	.package(url: "https://github.com/sideeffect-io/AsyncExtensions.git", .upToNextMajor(from: "0.5.3")),
 					  	.package(url: "https://github.com/groue/Semaphore.git", .upToNextMajor(from: "0.0.4")),
 					  	.package(url: "https://github.com/arennow/Loggable.git", branch: "2.0.0-beta"),
+					  	.package(url: "https://github.com/swiftlang/swift-syntax.git", "600.0.0"..<"603.0.0"),
+					  	.package(url: "https://github.com/stackotter/swift-macro-toolkit.git", .upToNextMajor(from: "0.6.0")),
 					  ],
 					  targets: [
 					  	.target(name: "Ironbird",
@@ -28,6 +37,17 @@ let package = Package(name: "Ironbird",
 								  swiftSettings: [
 								  	.enableUpcomingFeature("MemberImportVisibility"),
 								  ]),
+					  	.macro(name: "UUIDIDMacros",
+								 dependencies: [
+								 	.product(name: "SwiftSyntaxMacros", package: "swift-syntax", condition: .when(traits: ["UUIDID"])),
+								 	.product(name: "SwiftCompilerPlugin", package: "swift-syntax", condition: .when(traits: ["UUIDID"])),
+								 	.product(name: "MacroToolkit", package: "swift-macro-toolkit", condition: .when(traits: ["UUIDID"])),
+								 ]),
+					  	.target(name: "UUIDID",
+								  dependencies: [
+								  	"Ironbird",
+								  	.target(name: "UUIDIDMacros", condition: .when(traits: ["UUIDID"])),
+								  ]),
 					  	.testTarget(name: "IronbirdTests",
 									  dependencies: [
 									  	"Ironbird",
@@ -35,5 +55,11 @@ let package = Package(name: "Ironbird",
 									  ],
 									  swiftSettings: [
 									  	.enableUpcomingFeature("MemberImportVisibility"),
+									  ]),
+					  	.testTarget(name: "UUIDIDTests",
+									  dependencies: [
+									  	.target(name: "UUIDID", condition: .when(traits: ["UUIDID"])),
+									  	.target(name: "UUIDIDMacros", condition: .when(traits: ["UUIDID"])),
+									  	.product(name: "SwiftSyntaxMacrosTestSupport", package: "swift-syntax", condition: .when(traits: ["UUIDID"])),
 									  ]),
 					  ])
