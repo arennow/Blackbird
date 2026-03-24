@@ -1,8 +1,8 @@
 #if UUIDID
+	import IronbirdUUIDIDMacros
 	import SwiftSyntaxMacros
 	import SwiftSyntaxMacrosTestSupport
 	import Testing
-	import UUIDIDMacros
 
 	let testMacros: [String: Macro.Type] = [
 		"UUIDID": UUIDIDMacro.self,

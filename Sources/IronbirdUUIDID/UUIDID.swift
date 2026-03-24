@@ -2,7 +2,7 @@
 	import Ironbird
 
 	@attached(member, names: named(ID))
-	public macro UUIDID() = #externalMacro(module: "UUIDIDMacros", type: "UUIDIDMacro")
+	public macro UUIDID() = #externalMacro(module: "IronbirdUUIDIDMacros", type: "UUIDIDMacro")
 
 	public protocol UUIDID: Sendable {
 		associatedtype OwningType
