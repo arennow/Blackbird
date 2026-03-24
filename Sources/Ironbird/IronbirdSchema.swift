@@ -219,10 +219,13 @@ extension Ironbird {
 		private static let resolvedTablesWithDatabases = Mutex([Table: Set<Database.InstanceID>]())
 		private static let resolvedTableNamesInDatabases = Mutex([Database.InstanceID: Set<String>]())
 
-		// In service of `Core.resetResolvedTables`
-		static func resetResolvedTables() {
-			Self.resolvedTablesWithDatabases.withLock { $0.removeAll() }
-			Self.resolvedTableNamesInDatabases.withLock { $0.removeAll() }
+		static func resetResolvedTables(for databaseID: Database.InstanceID) {
+			Self.resolvedTablesWithDatabases.withLock { dict in
+				for key in dict.keys {
+					dict[key]?.remove(databaseID)
+				}
+			}
+			Self.resolvedTableNamesInDatabases.withLock { $0[databaseID] = nil }
 		}
 
 		init(name: String, columns: [Column], primaryKeyColumnNames: [String] = ["id"], indexes: [Index] = [], fullTextSearchableColumns: [String: IronbirdModelFullTextSearchableColumn], emptyInstance: any IronbirdModel) {

@@ -1,5 +1,5 @@
 {
-  "originHash" : "c04fbca53e6a2c8ff178b6767a3069c73aecacd4dd04bbfabd196c1a500954ff",
+  "originHash" : "494b1dd9971baf07fccde5005d17be26b8871269d4c0acb881735b7e7fa01d6e",
   "pins" : [
     {
       "identity" : "asyncextensions",
@@ -8,6 +8,24 @@
       "state" : {
         "revision" : "c2b32caf189993285b5a782fe7cd658ed1fa9b9a",
         "version" : "0.5.5"
+      }
+    },
+    {
+      "identity" : "dirs",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/arennow/Dirs.git",
+      "state" : {
+        "revision" : "ef14d1f5013271d20dec353946525ea2b76e6e5f",
+        "version" : "0.15.0"
+      }
+    },
+    {
+      "identity" : "locked",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/arennow/Locked.git",
+      "state" : {
+        "revision" : "7555d7783fe6cd1cfcd59316295b116e337dd04a",
+        "version" : "2.0.0"
       }
     },
     {
@@ -26,6 +44,15 @@
       "state" : {
         "revision" : "2543679282aa6f6c8ecf2138acd613ed20790bc2",
         "version" : "0.1.0"
+      }
+    },
+    {
+      "identity" : "swift-algorithms",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/apple/swift-algorithms.git",
+      "state" : {
+        "revision" : "87e50f483c54e6efd60e885f7f5aa946cee68023",
+        "version" : "1.2.1"
       }
     },
     {
@@ -56,12 +83,30 @@
       }
     },
     {
+      "identity" : "swift-numerics",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/apple/swift-numerics.git",
+      "state" : {
+        "revision" : "0c0290ff6b24942dadb83a929ffaaa1481df04a2",
+        "version" : "1.1.1"
+      }
+    },
+    {
       "identity" : "swift-syntax",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/swiftlang/swift-syntax.git",
       "state" : {
         "revision" : "4799286537280063c85a32f09884cfbca301b1a1",
         "version" : "602.0.0"
+      }
+    },
+    {
+      "identity" : "swift-system",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/apple/swift-system",
+      "state" : {
+        "revision" : "7c6ad0fc39d0763e0b699210e4124afd5041c5df",
+        "version" : "1.6.4"
       }
     }
   ],

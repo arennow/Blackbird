@@ -423,7 +423,7 @@ public extension Ironbird {
 				self.fileChangeMonitor = nil
 			}
 
-			self.core = Core(SQLiteDBHandle(handle), changeReporter: self.changeReporter, cache: self.cache, fileChangeMonitor: self.fileChangeMonitor, options: options)
+			self.core = Core(SQLiteDBHandle(handle), databaseID: self.id, changeReporter: self.changeReporter, cache: self.cache, fileChangeMonitor: self.fileChangeMonitor, options: options)
 			self.perfLog = performanceLog
 
 			sqlite3_update_hook(handle, { ctx, _, _, tableName, rowid in
@@ -507,6 +507,7 @@ public extension Ironbird {
 			private var debugPrintQueryParameterValues = false
 
 			var dbHandle: SQLiteDBHandle
+			private let databaseID: Database.InstanceID
 			private weak var changeReporter: ChangeReporter?
 			private weak var fileChangeMonitor: FileChangeMonitor?
 			private weak var cache: Cache?
@@ -519,8 +520,9 @@ public extension Ironbird {
 
 			private var perfLog = PerformanceLogger(subsystem: Ironbird.loggingSubsystem, category: "Database.Core")
 
-			init(_ dbHandle: SQLiteDBHandle, changeReporter: ChangeReporter?, cache: Cache?, fileChangeMonitor: FileChangeMonitor?, options: Database.Options) {
+			init(_ dbHandle: SQLiteDBHandle, databaseID: Database.InstanceID, changeReporter: ChangeReporter?, cache: Cache?, fileChangeMonitor: FileChangeMonitor?, options: Database.Options) {
 				self.dbHandle = dbHandle
+				self.databaseID = databaseID
 				self.changeReporter = changeReporter
 				self.fileChangeMonitor = fileChangeMonitor
 				self.cache = cache
@@ -582,8 +584,8 @@ public extension Ironbird {
 			}
 
 			/// Reset internal notion of what Swift type corresponds to what SQL table
-			public func resetResolvedTables() {
-				Table.resetResolvedTables()
+			package func resetResolvedTables() {
+				Table.resetResolvedTables(for: self.databaseID)
 			}
 
 			// Exactly like the function below, but accepts an async action
