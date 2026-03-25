@@ -352,8 +352,8 @@ public extension Ironbird {
 		public var isClosed: Bool { self._isClosed.load(ordering: .relaxed) }
 
 		/// Instantiates a new SQLite database in memory, without persisting to a file.
-		public static func inMemoryDatabase(options: Options = []) throws -> Database {
-			try Database(path: "", options: options.union([.inMemoryDatabase]))
+		public static func inMemoryDatabase(options: Options = []) -> Database {
+			try! Database(path: "", options: options.union([.inMemoryDatabase]))
 		}
 
 		/// Instantiates a new SQLite database as a file on disk.

@@ -4,7 +4,7 @@ import Synchronization
 import Testing
 
 struct BasicMigrationTests {
-	let db = try! Ironbird.Database.inMemoryDatabase()
+	let db = Ironbird.Database.inMemoryDatabase()
 
 	@Test
 	func runsSingleMigration() async throws {

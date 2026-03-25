@@ -5,7 +5,7 @@ import Testing
 struct ComplexMigrationTests {
 	@Test
 	func splitsTable() async throws {
-		let db = try Ironbird.Database.inMemoryDatabase()
+		let db = Ironbird.Database.inMemoryDatabase()
 
 		let personBefore = Person1(id: 0,
 								   name: "Aaron",

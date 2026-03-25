@@ -562,8 +562,7 @@ final class IronbirdTests: IBLoggable {
 
 	@Test
 	func concurrentAccessToSameDBFile() async throws {
-		let mem1 = try Ironbird.Database.inMemoryDatabase(options: [.debugPrintEveryQuery, .debugPrintEveryReportedChange])
-		#expect(throws: Never.self) { try Ironbird.Database.inMemoryDatabase() }
+		let mem1 = Ironbird.Database.inMemoryDatabase(options: [.debugPrintEveryQuery, .debugPrintEveryReportedChange])
 		try await mem1.execute("PRAGMA user_version = 1") // so mem1 doesn't get deallocated until after this
 
 		let db1 = try Ironbird.Database(path: self.sqliteFilename)
@@ -737,7 +736,7 @@ final class IronbirdTests: IBLoggable {
 	@Test
 	func columnChanges() async throws {
 		let db = try Ironbird.Database(path: self.sqliteFilename, options: [.debugPrintEveryQuery, .debugPrintEveryReportedChange])
-		let db2 = try Ironbird.Database.inMemoryDatabase()
+		let db2 = Ironbird.Database.inMemoryDatabase()
 
 		var t = TestModel(id: TestData.randomInt64(), title: "Original Title", url: TestData.randomURL)
 		#expect(t.$id.hasChanged(in: db))
@@ -992,7 +991,7 @@ final class IronbirdTests: IBLoggable {
 
 	@Test
 	func optionalColumn() async throws {
-		let db = try Ironbird.Database.inMemoryDatabase(options: [.debugPrintEveryQuery, .debugPrintQueryParameterValues])
+		let db = Ironbird.Database.inMemoryDatabase(options: [.debugPrintEveryQuery, .debugPrintQueryParameterValues])
 
 		let testDate = Date()
 		let testURL = try #require(URL(string: "https://github.com/marcoarment/Blackbird"))
@@ -1064,7 +1063,7 @@ final class IronbirdTests: IBLoggable {
 
 	@Test
 	func uniqueIndex() async throws {
-		let db = try Ironbird.Database.inMemoryDatabase(options: [.debugPrintEveryQuery, .debugPrintQueryParameterValues])
+		let db = Ironbird.Database.inMemoryDatabase(options: [.debugPrintEveryQuery, .debugPrintQueryParameterValues])
 
 		let testDate = Date()
 		try await TestModelWithUniqueIndex(id: 1, a: "a1", b: 100, c: testDate).write(to: db)
