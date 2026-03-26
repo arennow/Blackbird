@@ -25,7 +25,6 @@ let package = Package(name: "Ironbird",
 					  ],
 					  dependencies: [
 					  	.package(url: "https://github.com/sideeffect-io/AsyncExtensions.git", .upToNextMajor(from: "0.5.3")),
-					  	.package(url: "https://github.com/groue/Semaphore.git", .upToNextMajor(from: "0.0.4")),
 					  	.package(url: "https://github.com/arennow/Loggable.git", branch: "2.0.0-beta"),
 					  	.package(url: "https://github.com/swiftlang/swift-syntax.git", "600.0.0"..<"603.0.0"),
 					  	.package(url: "https://github.com/stackotter/swift-macro-toolkit.git", .upToNextMajor(from: "0.6.0")),
@@ -35,7 +34,6 @@ let package = Package(name: "Ironbird",
 					  	.target(name: "Ironbird",
 								  dependencies: [
 								  	"AsyncExtensions",
-								  	"Semaphore",
 								  	"Loggable",
 								  ],
 								  swiftSettings: [
@@ -55,7 +53,6 @@ let package = Package(name: "Ironbird",
 					  	.testTarget(name: "IronbirdTests",
 									  dependencies: [
 									  	"Ironbird",
-									  	"Semaphore",
 									  ],
 									  swiftSettings: [
 									  	.enableUpcomingFeature("MemberImportVisibility"),

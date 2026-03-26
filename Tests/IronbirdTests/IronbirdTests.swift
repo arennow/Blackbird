@@ -34,7 +34,6 @@
 import Foundation
 @testable import Ironbird
 import Loggable
-import Semaphore
 import Testing
 
 final class IronbirdTests: IBLoggable {

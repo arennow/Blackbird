@@ -32,7 +32,6 @@
 //
 
 import Foundation
-import Semaphore
 import SQLite3
 import Synchronization
 

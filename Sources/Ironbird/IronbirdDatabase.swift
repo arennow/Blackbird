@@ -33,7 +33,6 @@
 
 import Foundation
 import Loggable
-import Semaphore
 import SQLite3
 import Synchronization
 
@@ -612,12 +611,30 @@ public extension Ironbird {
 				}
 			}
 
-			private let asyncTransactionSemaphore = AsyncSemaphore(value: 1)
+			// These next two properties are only used in the async-taking version of `cancellableTransaction`
+			private var isAsyncTransactionInProgress = false
+			private var asyncTransactionContinuations = Array<CheckedContinuation<Void, Never>>()
 
 			// Exactly like the function below, but accepts an async action
 			public func cancellableTransaction<R: Sendable>(_ action: (@Sendable (_ core: isolated Ironbird.Database.Core) async throws -> R)) async throws -> Ironbird.TransactionResult<R> {
-				await self.asyncTransactionSemaphore.wait()
-				defer { asyncTransactionSemaphore.signal() }
+				// This is a little weird. It's basically a semaphore but it doesn't yield
+				// (and thus drop isolation) in the uncontended case, which turns out to be
+				// really important for the migrate-and-open use case
+				if self.isAsyncTransactionInProgress {
+					await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+						self.asyncTransactionContinuations.append(continuation)
+					}
+				} else {
+					self.isAsyncTransactionInProgress = true
+				}
+
+				defer {
+					if let next = self.asyncTransactionContinuations.popLast() {
+						next.resume()
+					} else {
+						self.isAsyncTransactionInProgress = false
+					}
+				}
 
 				if self.isClosed { throw Error.databaseIsClosed }
 				let transactionID = self.nextTransactionID
