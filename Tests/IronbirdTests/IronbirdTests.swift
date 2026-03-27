@@ -792,7 +792,7 @@ final class IronbirdTests: IBLoggable {
 		#expect(t.changedColumns(in: db).isEmpty)
 	}
 
-	@Test(.disabled("Flaky async timing"))
+	@Test
 	func changeNotifications() async throws {
 		let db = try Ironbird.Database(path: self.sqliteFilename, options: [.debugPrintEveryQuery, .debugPrintEveryReportedChange, .debugPrintQueryParameterValues])
 
@@ -852,7 +852,7 @@ final class IronbirdTests: IBLoggable {
 		await state.setExpectedTable("TestModelWithDescription")
 
 		// Batched change notifications
-		let count = min(TestData.URLs.count, TestData.titles.count, TestData.descriptions.count)
+		let count = max(TestData.URLs.count, TestData.titles.count, TestData.descriptions.count)
 
 		func megaYield() async {
 			for _ in 0..<count {
