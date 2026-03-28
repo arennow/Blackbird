@@ -33,7 +33,11 @@
 
 import Foundation
 import Loggable
-import SQLite3
+#if canImport(SQLite3)
+	import SQLite3
+#elseif canImport(CSQLite3)
+	import CSQLite3
+#endif
 import Synchronization
 
 public extension Ironbird {
@@ -235,7 +239,11 @@ public extension Ironbird {
 			public static let readOnly = Options(rawValue: 1 << 1)
 
 			/// Monitor for changes to the database file from outside of this connection, such as from a different process or a different SQLite library within the same process.
-			public static let monitorForExternalChanges = Options(rawValue: 1 << 2)
+			///
+			/// > Note: This option is only available on Darwin platforms. It has no effect on Linux.
+			#if canImport(Darwin)
+				public static let monitorForExternalChanges = Options(rawValue: 1 << 2)
+			#endif
 
 			/// Logs every query. Useful for debugging.
 			public static let debugPrintEveryQuery = Options(rawValue: 1 << 3)
@@ -373,7 +381,9 @@ public extension Ironbird {
 			var normalizedOptions = options
 			if path.isEmpty || path == ":memory:" {
 				normalizedOptions.insert(.inMemoryDatabase)
-				normalizedOptions.remove(.monitorForExternalChanges)
+				#if canImport(Darwin)
+					normalizedOptions.remove(.monitorForExternalChanges)
+				#endif
 			}
 
 			let isUniqueInstanceForPath = normalizedOptions.contains(.inMemoryDatabase) || InstancePool.addInstance(path: path)
@@ -408,19 +418,23 @@ public extension Ironbird {
 				throw Error.unsupportedConfigurationAtPath(path: path)
 			}
 
-			if options.contains(.monitorForExternalChanges), let sqliteFilenameRef = sqlite3_db_filename(handle, nil) {
-				self.fileChangeMonitor = FileChangeMonitor()
+			#if canImport(Darwin)
+				if options.contains(.monitorForExternalChanges), let sqliteFilenameRef = sqlite3_db_filename(handle, nil) {
+					self.fileChangeMonitor = FileChangeMonitor()
 
-				if let cStr = sqlite3_filename_database(sqliteFilenameRef), let dbFilename = String(cString: cStr, encoding: .utf8), !dbFilename.isEmpty {
-					self.fileChangeMonitor?.addFile(filePath: dbFilename)
-				}
+					if let cStr = sqlite3_filename_database(sqliteFilenameRef), let dbFilename = String(cString: cStr, encoding: .utf8), !dbFilename.isEmpty {
+						self.fileChangeMonitor?.addFile(filePath: dbFilename)
+					}
 
-				if let cStr = sqlite3_filename_wal(sqliteFilenameRef), let walFilename = String(cString: cStr, encoding: .utf8), !walFilename.isEmpty {
-					self.fileChangeMonitor?.addFile(filePath: walFilename)
+					if let cStr = sqlite3_filename_wal(sqliteFilenameRef), let walFilename = String(cString: cStr, encoding: .utf8), !walFilename.isEmpty {
+						self.fileChangeMonitor?.addFile(filePath: walFilename)
+					}
+				} else {
+					self.fileChangeMonitor = nil
 				}
-			} else {
+			#else
 				self.fileChangeMonitor = nil
-			}
+			#endif
 
 			self.core = Core(SQLiteDBHandle(handle), databaseID: self.id, changeReporter: self.changeReporter, cache: self.cache, fileChangeMonitor: self.fileChangeMonitor, options: options)
 			self.perfLog = performanceLog
@@ -528,10 +542,12 @@ public extension Ironbird {
 				self.debugPrintEveryQuery = options.contains(.debugPrintEveryQuery)
 				self.debugPrintQueryParameterValues = options.contains(.debugPrintQueryParameterValues)
 
-				if options.contains(.monitorForExternalChanges), SQLITE_OK == sqlite3_prepare_v3(dbHandle.pointer, "PRAGMA data_version", -1, UInt32(SQLITE_PREPARE_PERSISTENT), &self.dataVersionStmt, nil) {
-					if SQLITE_ROW == sqlite3_step(self.dataVersionStmt) { self.previousDataVersion = sqlite3_column_int64(self.dataVersionStmt, 0) }
-					sqlite3_reset(self.dataVersionStmt)
-				}
+				#if canImport(Darwin)
+					if options.contains(.monitorForExternalChanges), SQLITE_OK == sqlite3_prepare_v3(dbHandle.pointer, "PRAGMA data_version", -1, UInt32(SQLITE_PREPARE_PERSISTENT), &self.dataVersionStmt, nil) {
+						if SQLITE_ROW == sqlite3_step(self.dataVersionStmt) { self.previousDataVersion = sqlite3_column_int64(self.dataVersionStmt, 0) }
+						sqlite3_reset(self.dataVersionStmt)
+					}
+				#endif
 			}
 
 			deinit {

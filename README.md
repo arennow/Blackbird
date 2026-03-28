@@ -166,6 +166,20 @@ try await db.transaction { core in
 
 * __Nested struct definitions inside protocols__ could make a lot of my "IronbirdModel…" names shorter.
 
+## Linux Support
+
+Ironbird compiles and passes all tests on Linux (Ubuntu). To build on Linux, install `libsqlite3-dev`:
+
+```bash
+sudo apt install libsqlite3-dev
+```
+
+Some features are unavailable on Linux:
+
+- **File change monitoring (`Ironbird.Database.Options.monitorForExternalChanges`):** This option is only available on Darwin and is not compiled into Linux builds. It enables detection of changes made to a database file by _other processes_ or _other SQLite connections within the same process_ — useful when multiple apps share a database, or when syncing tools like iCloud or Dropbox modify the file on disk. On Darwin, Ironbird uses `DispatchSourceFileSystemObject` (a kernel-level file descriptor watch via `O_EVTONLY`) to detect these writes and invalidate the cache accordingly. A Linux implementation using `inotify` would be straightforward to add in the future.
+- **Performance logging (OSLog/Instruments):** The `PerformanceLogger` is a no-op on Linux. Performance profiling via Instruments is a Darwin-only feature.
+- **Low-memory cache flushing:** `DispatchSourceMemoryPressure` is unavailable on Linux, so the cache does not automatically flush under memory pressure. The cache otherwise works normally.
+
 ## FAQ
 
 ### Why don't you have a SwiftUI property wrapper?

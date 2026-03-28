@@ -32,7 +32,11 @@
 //
 
 import Foundation
-import SQLite3
+#if canImport(SQLite3)
+	import SQLite3
+#elseif canImport(CSQLite3)
+	import CSQLite3
+#endif
 import Synchronization
 
 /// A small, fast, lightweight SQLite database wrapper and model layer.
@@ -246,58 +250,70 @@ public enum Ironbird {
 // MARK: - Utilities
 
 extension Ironbird {
-	final class FileChangeMonitor: Sendable {
-		private struct State {
-			var sources: [DispatchSourceFileSystemObject] = []
-			var changeHandler: (@Sendable () -> Void)?
-			var isClosed = false
-			var currentExpectedChanges = Set<Int64>()
-		}
+	#if canImport(Darwin)
+		final class FileChangeMonitor: Sendable {
+			private struct State {
+				var sources: [DispatchSourceFileSystemObject] = []
+				var changeHandler: (@Sendable () -> Void)?
+				var isClosed = false
+				var currentExpectedChanges = Set<Int64>()
+			}
 
-		private let state = Mutex(State())
+			private let state = Mutex(State())
 
-		func addFile(filePath: String) {
-			let fsPath = (filePath as NSString).fileSystemRepresentation
-			let fd = open(fsPath, O_EVTONLY)
-			guard fd >= 0 else { return }
+			func addFile(filePath: String) {
+				let fsPath = (filePath as NSString).fileSystemRepresentation
+				let fd = open(fsPath, O_EVTONLY)
+				guard fd >= 0 else { return }
 
-			let source = DispatchSource.makeFileSystemObjectSource(fileDescriptor: fd, eventMask: [.write, .extend, .delete, .rename, .revoke], queue: nil)
-			source.setCancelHandler { Darwin.close(fd) }
+				let source = DispatchSource.makeFileSystemObjectSource(fileDescriptor: fd, eventMask: [.write, .extend, .delete, .rename, .revoke], queue: nil)
+				source.setCancelHandler { Darwin.close(fd) }
 
-			source.setEventHandler { [weak self] in
-				guard let self else { return }
+				source.setEventHandler { [weak self] in
+					guard let self else { return }
+					self.state.withLock { s in
+						if s.currentExpectedChanges.isEmpty, !s.isClosed { s.changeHandler?() }
+					}
+				}
+
+				source.activate()
+				self.state.withLock { $0.sources.append(source) }
+			}
+
+			deinit {
+				cancel()
+			}
+
+			func onChange(_ handler: @escaping @Sendable () -> Void) {
+				self.state.withLock { $0.changeHandler = handler }
+			}
+
+			func cancel() {
 				self.state.withLock { s in
-					if s.currentExpectedChanges.isEmpty, !s.isClosed { s.changeHandler?() }
+					s.isClosed = true
+					for source in s.sources {
+						source.cancel()
+					}
 				}
 			}
 
-			source.activate()
-			self.state.withLock { $0.sources.append(source) }
-		}
+			func beginExpectedChange(_ changeID: Int64) {
+				self.state.withLock { _ = $0.currentExpectedChanges.insert(changeID) }
+			}
 
-		deinit {
-			cancel()
-		}
-
-		func onChange(_ handler: @escaping @Sendable () -> Void) {
-			self.state.withLock { $0.changeHandler = handler }
-		}
-
-		func cancel() {
-			self.state.withLock { s in
-				s.isClosed = true
-				for source in s.sources {
-					source.cancel()
-				}
+			func endExpectedChange(_ changeID: Int64) {
+				self.state.withLock { _ = $0.currentExpectedChanges.remove(changeID) }
 			}
 		}
-
-		func beginExpectedChange(_ changeID: Int64) {
-			self.state.withLock { _ = $0.currentExpectedChanges.insert(changeID) }
+	#else
+		// No-op implementation for platforms without Darwin dispatch sources (e.g. Linux).
+		// File change monitoring requires Darwin-specific APIs (DispatchSourceFileSystemObject, O_EVTONLY).
+		final class FileChangeMonitor: Sendable {
+			func addFile(filePath: String) {}
+			func onChange(_ handler: @escaping @Sendable () -> Void) {}
+			func cancel() {}
+			func beginExpectedChange(_ changeID: Int64) {}
+			func endExpectedChange(_ changeID: Int64) {}
 		}
-
-		func endExpectedChange(_ changeID: Int64) {
-			self.state.withLock { _ = $0.currentExpectedChanges.remove(changeID) }
-		}
-	}
+	#endif
 }

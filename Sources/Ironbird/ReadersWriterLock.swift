@@ -20,7 +20,13 @@
 //  SOFTWARE.
 //
 
-import Darwin
+#if canImport(Darwin)
+	import Darwin
+#elseif canImport(Glibc)
+	import Glibc
+#elseif canImport(Musl)
+	import Musl
+#endif
 
 /// A readers-writer lock that protects a value of type `Value`.
 ///

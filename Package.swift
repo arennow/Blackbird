@@ -30,9 +30,11 @@ let package = Package(name: "Ironbird",
 					  	.package(url: "https://github.com/arennow/Dirs.git", .upToNextMinor(from: "0.15.0")),
 					  ],
 					  targets: [
+					  	.systemLibrary(name: "CSQLite3", pkgConfig: "sqlite3", providers: [.apt(["libsqlite3-dev"])]),
 					  	.target(name: "Ironbird",
 								  dependencies: [
 								  	"Loggable",
+								  	.target(name: "CSQLite3", condition: .when(platforms: [.linux])),
 								  ],
 								  swiftSettings: [
 								  	.enableUpcomingFeature("MemberImportVisibility"),

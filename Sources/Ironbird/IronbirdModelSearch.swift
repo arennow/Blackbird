@@ -32,7 +32,11 @@
 //
 
 import Foundation
-import SQLite3
+#if canImport(SQLite3)
+	import SQLite3
+#elseif canImport(CSQLite3)
+	import CSQLite3
+#endif
 
 /// Defines a searchable field for a full-text index in a ``IronbirdModel/fullTextSearchableColumns`` dictionary.
 public struct IronbirdModelFullTextSearchableColumn: Equatable, Hashable, Sendable {

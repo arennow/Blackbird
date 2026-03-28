@@ -71,11 +71,11 @@ public extension Ironbird.Database {
 
 			init(_ value: T) {
 				self._value = value
-				self.lastAccessed = mach_absolute_time()
+				self.lastAccessed = DispatchTime.now().uptimeNanoseconds
 			}
 
 			public func value() -> T {
-				self.lastAccessed = mach_absolute_time()
+				self.lastAccessed = DispatchTime.now().uptimeNanoseconds
 				return self._value
 			}
 		}
@@ -85,27 +85,31 @@ public extension Ironbird.Database {
 			case hit(value: Sendable?)
 		}
 
-		private let lowMemoryEventSource: DispatchSourceMemoryPressure
-		public init() {
-			self.lowMemoryEventSource = DispatchSource.makeMemoryPressureSource(eventMask: [.warning, .critical])
-			self.lowMemoryEventSource.setEventHandler { [weak self] in
-				self?.entriesByTableName.withLock { entries in
-					//
-					// To avoid loading potentially-compressed memory pages and exacerbating memory pressure,
-					//  or taking precious time to walk the cache contents with the normal prune() operation,
-					//  just dump everything.
-					//
-					for (_, cache) in entries {
-						cache.flushForLowMemory()
+		#if canImport(Darwin)
+			private let lowMemoryEventSource: DispatchSourceMemoryPressure
+			init() {
+				self.lowMemoryEventSource = DispatchSource.makeMemoryPressureSource(eventMask: [.warning, .critical])
+				self.lowMemoryEventSource.setEventHandler { [weak self] in
+					self?.entriesByTableName.withLock { entries in
+						//
+						// To avoid loading potentially-compressed memory pages and exacerbating memory pressure,
+						//  or taking precious time to walk the cache contents with the normal prune() operation,
+						//  just dump everything.
+						//
+						for (_, cache) in entries {
+							cache.flushForLowMemory()
+						}
 					}
 				}
+				self.lowMemoryEventSource.resume()
 			}
-			self.lowMemoryEventSource.resume()
-		}
 
-		deinit {
-			lowMemoryEventSource.cancel()
-		}
+			deinit {
+				lowMemoryEventSource.cancel()
+			}
+		#else
+			init() {}
+		#endif
 
 		private final class TableCache: Sendable {
 			private struct State {
@@ -126,7 +130,7 @@ public extension Ironbird.Database {
 			func get(primaryKey: Ironbird.Value) -> (any IronbirdModel)? {
 				self.state.withLock { s in
 					if let hit = s.modelsByPrimaryKey[primaryKey] {
-						hit.lastAccessed = mach_absolute_time()
+						hit.lastAccessed = DispatchTime.now().uptimeNanoseconds
 						s.hits += 1
 						return hit.value()
 					} else {

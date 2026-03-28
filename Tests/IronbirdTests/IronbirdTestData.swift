@@ -44,18 +44,13 @@ enum TestData {
 	}
 
 	static func randomString(length: Int) -> String {
-		var data = Data(count: length)
-		let result = data.withUnsafeMutableBytes { SecRandomCopyBytes(kSecRandomDefault, length, $0.baseAddress!) }
-		if result != errSecSuccess { fatalError("SecRandomCopyBytes failed") }
+		let data = Data((0..<length).map { _ in UInt8.random(in: 0...255) })
 		let b64 = data.base64EncodedString()
 		return String(b64.prefix(upTo: b64.index(b64.startIndex, offsetBy: length)))
 	}
 
 	static func randomData(length: Int) -> Data {
-		var data = Data(count: length)
-		let result = data.withUnsafeMutableBytes { SecRandomCopyBytes(kSecRandomDefault, length, $0.baseAddress!) }
-		if result != errSecSuccess { fatalError("SecRandomCopyBytes failed") }
-		return data
+		Data((0..<length).map { _ in UInt8.random(in: 0...255) })
 	}
 }
 
