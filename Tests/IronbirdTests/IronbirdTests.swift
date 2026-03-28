@@ -854,10 +854,13 @@ final class IronbirdTests: IBLoggable {
 		// Batched change notifications
 		let count = max(TestData.URLs.count, TestData.titles.count, TestData.descriptions.count)
 
-		func megaYield() async {
-			for _ in 0..<count {
-				await Task.yield()
+		func waitForCallCount(_ expected: Int, timeout: Duration = .seconds(5)) async throws {
+			let deadline = ContinuousClock.now + timeout
+			while await state.callCount < expected {
+				if ContinuousClock.now > deadline { break }
+				try await Task.sleep(for: .milliseconds(1))
 			}
+			await #expect(state.callCount == expected, "Unexpected change notification count")
 		}
 
 		try await db.transaction { core in
@@ -869,52 +872,46 @@ final class IronbirdTests: IBLoggable {
 			}
 			await state.setExpectedKeysAndColumnNames(expectedBatchedKeys, Ironbird.ColumnNames(["id", "url", "title", "description"]))
 		}
-		await megaYield()
 		expectedChangeNotificationsCallCount += 1
-		await #expect(state.callCount == expectedChangeNotificationsCallCount)
+		try await waitForCallCount(expectedChangeNotificationsCallCount)
 
 		// Individual change notifications
 		var m = try #require(await TestModelWithDescription.read(from: db, id: 64))
 		m.title = "Edited title!"
 		await state.setExpectedKeysAndColumnNames(Ironbird.PrimaryKeyValues([[.integer(64)]]), Ironbird.ColumnNames(["title"]))
 		try await m.write(to: db)
-		await megaYield()
 		expectedChangeNotificationsCallCount += 1
-		await #expect(state.callCount == expectedChangeNotificationsCallCount)
+		try await waitForCallCount(expectedChangeNotificationsCallCount)
 
 		// Unspecified/whole-table change notifications, with structured column info
 		await state.setExpectedKeysAndColumnNames(Ironbird.PrimaryKeyValues(Array(0..<count).map { [try! Ironbird.Value.fromAny($0)] }), Ironbird.ColumnNames(["url"]))
 		try await TestModelWithDescription.update(in: db, set: [\.$url: nil], matching: .all)
-		await megaYield()
 		expectedChangeNotificationsCallCount += 1
-		await #expect(state.callCount == expectedChangeNotificationsCallCount)
+		try await waitForCallCount(expectedChangeNotificationsCallCount)
 
 		// Unspecified/whole-table delete notifications, with structured column info
 		await state.setExpectedKeysAndColumnNames(Ironbird.PrimaryKeyValues(Array(0..<5).map { [try! Ironbird.Value.fromAny($0)] }), nil)
 		try await TestModelWithDescription.delete(from: db, matching: \.$id < 5)
-		await megaYield()
 		expectedChangeNotificationsCallCount += 1
-		await #expect(state.callCount == expectedChangeNotificationsCallCount)
+		try await waitForCallCount(expectedChangeNotificationsCallCount)
 
 		// Unspecified/whole-table change notifications, with structured column info and primary keys
 		await state.setExpectedKeysAndColumnNames([[7], [8], [9]], Ironbird.ColumnNames(["url"]))
 		try await TestModelWithDescription.update(in: db, set: [\.$url: nil], forPrimaryKeys: [7, 8, 9])
-		await megaYield()
 		expectedChangeNotificationsCallCount += 1
-		await #expect(state.callCount == expectedChangeNotificationsCallCount)
+		try await waitForCallCount(expectedChangeNotificationsCallCount)
 
 		// Unspecified/whole-table change notifications, structured, but affecting 0 rows -- no change notification expected
 		await state.setExpectedKeysAndColumnNames(nil, nil)
 		try await TestModelWithDescription.update(in: db, set: [\.$url: nil], matching: .all)
-		await megaYield()
-		await #expect(state.callCount == expectedChangeNotificationsCallCount)
+		try await Task.sleep(for: .milliseconds(50))
+		#expect(await state.callCount == expectedChangeNotificationsCallCount)
 
 		// Unspecified/whole-table change notifications
 		await state.setExpectedKeysAndColumnNames(nil, nil)
 		try await TestModelWithDescription.query(in: db, "UPDATE $T SET url = NULL")
-		await megaYield()
 		expectedChangeNotificationsCallCount += 1
-		await #expect(state.callCount == expectedChangeNotificationsCallCount)
+		try await waitForCallCount(expectedChangeNotificationsCallCount)
 
 		// Column-name merging
 		await state.setExpectedKeysAndColumnNames(Ironbird.PrimaryKeyValues([[.integer(31)], [.integer(32)]]), Ironbird.ColumnNames(["title", "description"]))
@@ -927,9 +924,8 @@ final class IronbirdTests: IBLoggable {
 			try t1.writeIsolated(to: db, core: core)
 			try t2.writeIsolated(to: db, core: core)
 		}
-		await megaYield()
 		expectedChangeNotificationsCallCount += 1
-		await #expect(state.callCount == expectedChangeNotificationsCallCount)
+		try await waitForCallCount(expectedChangeNotificationsCallCount)
 
 		// Merging with insertions
 		await state.setExpectedKeysAndColumnNames(Ironbird.PrimaryKeyValues([[.integer(40)], [.integer(Int64(count) + 1)]]), Ironbird.ColumnNames(["id", "title", "description", "url"]))
@@ -941,9 +937,8 @@ final class IronbirdTests: IBLoggable {
 			let t2 = TestModelWithDescription(id: count + 1, title: "New entry", description: "New description")
 			try t2.writeIsolated(to: db, core: core)
 		}
-		await megaYield()
 		expectedChangeNotificationsCallCount += 1
-		await #expect(state.callCount == expectedChangeNotificationsCallCount)
+		try await waitForCallCount(expectedChangeNotificationsCallCount)
 
 		// Merging with deletions
 		await state.setExpectedKeysAndColumnNames(Ironbird.PrimaryKeyValues([[.integer(50)], [.integer(51)]]), Ironbird.ColumnNames(["id", "title", "description", "url"]))
@@ -955,9 +950,8 @@ final class IronbirdTests: IBLoggable {
 			let t2 = try TestModelWithDescription.readIsolated(from: db, core: core, id: 51)!
 			try t2.deleteIsolated(from: db, core: core)
 		}
-		await megaYield()
 		expectedChangeNotificationsCallCount += 1
-		await #expect(state.callCount == expectedChangeNotificationsCallCount)
+		try await waitForCallCount(expectedChangeNotificationsCallCount)
 
 		// Merging with table-wide updates
 		await state.setExpectedKeysAndColumnNames(nil, nil)
@@ -968,18 +962,16 @@ final class IronbirdTests: IBLoggable {
 
 			try TestModelWithDescription.queryIsolated(in: db, core: core, "UPDATE $T SET description = ? WHERE id = 61", "Test description")
 		}
-		await megaYield()
 		expectedChangeNotificationsCallCount += 1
-		await #expect(state.callCount == expectedChangeNotificationsCallCount)
+		try await waitForCallCount(expectedChangeNotificationsCallCount)
 
 		// ------- Should be the last test in this func since it deletes the entire table -------
 		// The SQLite truncate optimization: https://www.sqlite.org/lang_delete.html#the_truncate_optimization
 		await state.setExpectedTable(nil)
 		await state.setExpectedKeysAndColumnNames(nil, nil)
 		try await TestModelWithDescription.query(in: db, "DELETE FROM $T")
-		await megaYield()
 		expectedChangeNotificationsCallCount += 2 // will trigger a full-database change notification, so it'll report 2 table changes: TestModel and TestModelWithDescription
-		await #expect(state.callCount == expectedChangeNotificationsCallCount)
+		try await waitForCallCount(expectedChangeNotificationsCallCount)
 	}
 
 	@Test
