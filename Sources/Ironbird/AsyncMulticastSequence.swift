@@ -21,7 +21,6 @@
 //
 
 import Foundation
-import Synchronization
 
 public final class AsyncMulticastSequence<T: Sendable>: AsyncSequence, Sendable {
 	public typealias Element = T
@@ -35,8 +34,7 @@ public final class AsyncMulticastSequence<T: Sendable>: AsyncSequence, Sendable 
 		var idsToTX: [UUID: TX] = [:]
 	}
 
-	// TODO: Use a readers-writer lock here instead of a mutex
-	private let state = Mutex(State())
+	private let state = ReadersWriterLock(State())
 	let bufferingPolicy: TX.BufferingPolicy
 
 	init(bufferingPolicy limit: TX.BufferingPolicy) {
@@ -57,13 +55,13 @@ public final class AsyncMulticastSequence<T: Sendable>: AsyncSequence, Sendable 
 		tx.onTermination = { @Sendable [weak self] termination in
 			// We don't remove it on a finish because:
 			// 1. This should only happen through `self.finish`, which will do it anyway
-			// 2. That means we'd have to try to recursively acquire the mutex, which is undefined
+			// 2. That means we'd have to try to recursively acquire the write lock, which is undefined
 			if termination != .finished {
-				_ = self?.state.withLock { $0.idsToTX.removeValue(forKey: id) }
+				_ = self?.state.withWriteLock { $0.idsToTX.removeValue(forKey: id) }
 			}
 		}
 
-		let alreadyFinished: Bool = self.state.withLock { s in
+		let alreadyFinished: Bool = self.state.withWriteLock { s in
 			if s.isFinished { return true }
 			s.idsToTX[id] = tx
 			return false
@@ -77,7 +75,7 @@ public final class AsyncMulticastSequence<T: Sendable>: AsyncSequence, Sendable 
 	}
 
 	func send(_ t: T) {
-		self.state.withLock { s in
+		self.state.withReadLock { s in
 			for tx in s.idsToTX.values {
 				tx.yield(t)
 			}
@@ -85,7 +83,7 @@ public final class AsyncMulticastSequence<T: Sendable>: AsyncSequence, Sendable 
 	}
 
 	func finish() {
-		self.state.withLock { s in
+		self.state.withWriteLock { s in
 			if s.isFinished { return }
 			s.isFinished = true
 			for tx in s.idsToTX.values {
