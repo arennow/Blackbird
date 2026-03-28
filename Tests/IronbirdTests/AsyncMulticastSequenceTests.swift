@@ -130,6 +130,120 @@ struct AsyncMulticastSequenceTests {
 		await #expect(receivedValues1.array == [1, 2, 3])
 		await #expect(receivedValues2.array == [2, 3])
 	}
+
+	@Test
+	func finishWithZeroSubscribers() {
+		let sequence = AsyncMulticastSequence<Int>(bufferingPolicy: .unbounded)
+		sequence.finish()
+		sequence.finish() // second call should be a no-op
+	}
+
+	@available(macOS 26.0, *)
+	@Test
+	func postFinishSubscriberTerminates() async {
+		let sequence = AsyncMulticastSequence<Int>(bufferingPolicy: .unbounded)
+		sequence.finish()
+
+		// A subscriber created after finish() should terminate immediately
+		let rTask = Task.immediate {
+			for await _ in sequence {
+				Issue.record("This should be unreachable")
+				break
+			}
+		}
+		await rTask.value
+	}
+
+	@available(macOS 26.0, *)
+	@Test
+	func cancelledSubscriberStopsReceiving() async {
+		let sequence = AsyncMulticastSequence<Int>(bufferingPolicy: .unbounded)
+		let receivedValues1 = ShareableArray<Int>()
+		let receivedValues2 = ShareableArray<Int>()
+
+		let rTask1 = Task.immediate {
+			for await value in sequence {
+				await receivedValues1.append(value)
+			}
+		}
+		let rTask2 = Task.immediate {
+			for await value in sequence {
+				await receivedValues2.append(value)
+			}
+		}
+
+		sequence.send(1)
+
+		rTask1.cancel()
+		await rTask1.value // wait for rTask1 to fully exit and its entry to be removed
+
+		sequence.send(2)
+		sequence.send(3)
+		sequence.finish()
+
+		await rTask2.value
+
+		await #expect(receivedValues1.array == [1])
+		await #expect(receivedValues2.array == [1, 2, 3])
+	}
+
+	@Test
+	func bufferingNewestDropsIntermediateValues() async {
+		let sequence = AsyncMulticastSequence<Int>(bufferingPolicy: .bufferingNewest(1))
+		let receivedValues = ShareableArray<Int>()
+
+		let (subscribedStream, subscribedContinuation) = AsyncStream<Void>.makeStream()
+		let (startStream, startContinuation) = AsyncStream<Void>.makeStream()
+
+		// Manually manage the iterator so we can subscribe without calling next() yet.
+		// The subscriber signals when it has subscribed, then waits for our go-ahead.
+		let rTask = Task {
+			var iterator = sequence.makeAsyncIterator()
+			subscribedContinuation.finish()
+			for await _ in startStream {}
+			while let value = await iterator.next() {
+				await receivedValues.append(value)
+			}
+		}
+
+		for await _ in subscribedStream {} // wait until subscribed
+
+		// All sends happen while the subscriber holds an iterator but has not yet called next().
+		// With bufferingNewest(1), each send overwrites the previous in the buffer; only 100 survives.
+		for i in 1...100 {
+			sequence.send(i)
+		}
+		sequence.finish()
+		startContinuation.finish()
+
+		await rTask.value
+
+		await #expect(receivedValues.array == [100])
+	}
+
+	@available(macOS 26.0, *)
+	@Test
+	func concurrentSendsAreThreadSafe() async {
+		let sequence = AsyncMulticastSequence<Int>(bufferingPolicy: .unbounded)
+		let receivedValues = ShareableArray<Int>()
+
+		let rTask = Task.immediate {
+			for await value in sequence {
+				await receivedValues.append(value)
+			}
+		}
+
+		await withTaskGroup(of: Void.self) { group in
+			for i in 0..<100 {
+				group.addTask { sequence.send(i) }
+			}
+		}
+
+		sequence.finish()
+		await rTask.value
+
+		await #expect(receivedValues.array.count == 100)
+	}
 }
 
 fileprivate actor ShareableArray<T> {

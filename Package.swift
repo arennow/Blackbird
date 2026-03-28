@@ -24,7 +24,6 @@ let package = Package(name: "Ironbird",
 					  	.trait(name: "Migration"),
 					  ],
 					  dependencies: [
-					  	.package(url: "https://github.com/sideeffect-io/AsyncExtensions.git", .upToNextMajor(from: "0.5.3")),
 					  	.package(url: "https://github.com/arennow/Loggable.git", branch: "2.0.0-beta"),
 					  	.package(url: "https://github.com/swiftlang/swift-syntax.git", "600.0.0"..<"603.0.0"),
 					  	.package(url: "https://github.com/stackotter/swift-macro-toolkit.git", .upToNextMajor(from: "0.6.0")),
@@ -33,7 +32,6 @@ let package = Package(name: "Ironbird",
 					  targets: [
 					  	.target(name: "Ironbird",
 								  dependencies: [
-								  	"AsyncExtensions",
 								  	"Loggable",
 								  ],
 								  swiftSettings: [

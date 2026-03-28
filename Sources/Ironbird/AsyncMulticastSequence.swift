@@ -23,15 +23,20 @@
 import Foundation
 import Synchronization
 
-final class AsyncMulticastSequence<T: Sendable>: AsyncSequence, Sendable {
-	typealias Element = T
-	typealias Failure = Never
+public final class AsyncMulticastSequence<T: Sendable>: AsyncSequence, Sendable {
+	public typealias Element = T
+	public typealias Failure = Never
 
 	typealias TX = AsyncStream<T>.Continuation
-	typealias RX = AsyncStream<T>.AsyncIterator
+	public typealias RX = AsyncStream<T>.AsyncIterator
+
+	private struct State {
+		var isFinished = false
+		var idsToTX: [UUID: TX] = [:]
+	}
 
 	// TODO: Use a readers-writer lock here instead of a mutex
-	private let idsToTX = Mutex(Dictionary<UUID, TX>())
+	private let state = Mutex(State())
 	let bufferingPolicy: TX.BufferingPolicy
 
 	init(bufferingPolicy limit: TX.BufferingPolicy) {
@@ -43,38 +48,50 @@ final class AsyncMulticastSequence<T: Sendable>: AsyncSequence, Sendable {
 		self.finish()
 	}
 
-	func makeAsyncIterator() -> RX {
+	public func makeAsyncIterator() -> RX {
 		let id = UUID()
 		let (stream, tx) = AsyncStream.makeStream(of: T.self, bufferingPolicy: self.bufferingPolicy)
 
-		self.idsToTX.withLock { $0[id] = tx }
-
+		// Set onTermination before inserting into the dict so that if the task is cancelled
+		// in the narrow window between them, the handler is already registered and will clean up.
 		tx.onTermination = { @Sendable [weak self] termination in
 			// We don't remove it on a finish because:
 			// 1. This should only happen through `self.finish`, which will do it anyway
 			// 2. That means we'd have to try to recursively acquire the mutex, which is undefined
 			if termination != .finished {
-				_ = self?.idsToTX.withLock { $0.removeValue(forKey: id) }
+				_ = self?.state.withLock { $0.idsToTX.removeValue(forKey: id) }
 			}
+		}
+
+		let alreadyFinished: Bool = self.state.withLock { s in
+			if s.isFinished { return true }
+			s.idsToTX[id] = tx
+			return false
+		}
+
+		if alreadyFinished {
+			tx.finish()
 		}
 
 		return stream.makeAsyncIterator()
 	}
 
 	func send(_ t: T) {
-		self.idsToTX.withLock { dict in
-			for tx in dict.values {
+		self.state.withLock { s in
+			for tx in s.idsToTX.values {
 				tx.yield(t)
 			}
 		}
 	}
 
 	func finish() {
-		self.idsToTX.withLock { dict in
-			for tx in dict.values {
+		self.state.withLock { s in
+			if s.isFinished { return }
+			s.isFinished = true
+			for tx in s.idsToTX.values {
 				tx.finish()
 			}
-			dict.removeAll()
+			s.idsToTX.removeAll()
 		}
 	}
 }

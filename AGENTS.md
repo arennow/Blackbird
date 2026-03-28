@@ -7,3 +7,5 @@ Don't fuss over precise whitespace or other formatting. Just make sure things wo
 Don't use string names for tests (`@Test("", …`); just name the functions clearly. Don't use `@Suite` unless you need to add a trait
 
 Ask any questions you need in order to ensure you have high confidence in your plan
+
+When running tests, use the timeout command to ensure that the async tests can't get stuck indefinitely. After changing anything to do with async handling, run the tests at least ten times in a row to check for transient issues.

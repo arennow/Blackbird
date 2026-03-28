@@ -31,7 +31,6 @@
 //  SOFTWARE.
 //
 
-import AsyncExtensions
 import Foundation
 import Loggable
 import Synchronization
@@ -77,7 +76,7 @@ public extension Ironbird {
 	/// An `AsyncSequence` that emits when data in a Ironbird table has changed.
 	///
 	/// The ``Ironbird/Change`` passed indicates which rows and columns in the table have changed.
-	typealias ChangeSequence = AsyncPassthroughSubject<Change>
+	typealias ChangeSequence = AsyncMulticastSequence<Change>
 
 	/// A change to a table in a Ironbird database, as emitted by a ``ChangeSequence``.
 	struct ModelChange<T: IronbirdModel>: Sendable {
@@ -137,7 +136,7 @@ public extension Ironbird {
 	/// An AsyncSequence that emits when data in a IronbirdModel table has changed.
 	///
 	/// The ``Ironbird/ModelChange`` passed indicates which rows and columns in the table have changed.
-	typealias ModelChangeSequence<T: IronbirdModel> = AsyncPassthroughSubject<ModelChange<T>>
+	typealias ModelChangeSequence<T: IronbirdModel> = AsyncMulticastSequence<ModelChange<T>>
 
 	internal static func isRelevantPrimaryKeyChange(watchedPrimaryKeys: Ironbird.PrimaryKeyValues?, changedPrimaryKeys: Ironbird.PrimaryKeyValues?) -> Bool {
 		guard let watchedPrimaryKeys else {
@@ -186,7 +185,7 @@ extension Ironbird.Database {
 			var bufferRowIDsForIgnoredTable = false
 			var bufferedRowIDsForIgnoredTable = Set<Int64>()
 			var accumulatedChangesByTable: [String: AccumulatedChanges] = [:]
-			var tableChangeSubjects: [String: AsyncPassthroughSubject<Ironbird.Change>] = [:]
+			var tableChangeSubjects: [String: AsyncMulticastSequence<Ironbird.Change>] = [:]
 		}
 
 		private let state = Mutex(State())
@@ -210,7 +209,7 @@ extension Ironbird.Database {
 		func changeSequence(for tableName: String) -> Ironbird.ChangeSequence {
 			self.state.withLock { s in
 				if let existing = s.tableChangeSubjects[tableName] { return existing }
-				let new = AsyncPassthroughSubject<Ironbird.Change>()
+				let new = AsyncMulticastSequence<Ironbird.Change>(bufferingPolicy: .bufferingNewest(1))
 				s.tableChangeSubjects[tableName] = new
 				return new
 			}

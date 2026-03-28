@@ -395,7 +395,7 @@ final class IronbirdTests: IBLoggable {
 
 		let results4 = try await TypeTest.read(from: db, sqlWhere: "typeStringEnum = ?", TypeTest.RepresentableStringEnum.one)
 		#expect(results4.count == 1)
-		#expect(try #require(results4.first?.id == Int64.max))
+		#expect(results4.first?.id == Int64.max)
 	}
 
 	@Test
