@@ -799,27 +799,11 @@ final class IronbirdTests: IBLoggable {
 		try await TestModel.resolveSchema(in: db)
 		try await TestModelWithDescription.resolveSchema(in: db)
 
-		actor ChangeState {
-			var expectedTable: String? = nil
-			var expectedKeys: Ironbird.PrimaryKeyValues? = nil
-			var expectedColumnNames: Ironbird.ColumnNames? = nil
-			var callCount = 0
+		let tmBuffer = NotificationBuffer<Ironbird.ModelChange<TestModel>>()
+		let tmwdBuffer = NotificationBuffer<Ironbird.ModelChange<TestModelWithDescription>>()
 
-			func setExpectedTable(_ v: String?) { self.expectedTable = v }
-			func setExpectedKeys(_ v: Ironbird.PrimaryKeyValues?) { self.expectedKeys = v }
-			func setExpectedColumnNames(_ v: Ironbird.ColumnNames?) { self.expectedColumnNames = v }
-			func setExpectedKeysAndColumnNames(_ k: Ironbird.PrimaryKeyValues?, _ c: Ironbird.ColumnNames?) {
-				self.expectedKeys = k
-				self.expectedColumnNames = c
-			}
-
-			func getExpectedKeysAndColumnNames() -> (Ironbird.PrimaryKeyValues?, Ironbird.ColumnNames?) {
-				(self.expectedKeys, self.expectedColumnNames)
-			}
-
-			func incrementCallCount() { self.callCount += 1 }
-		}
-		let state = ChangeState()
+		let (tmReadyStream, tmReadyContinuation) = AsyncStream<Void>.makeStream()
+		let (tmwdReadyStream, tmwdReadyContinuation) = AsyncStream<Void>.makeStream()
 
 		var listeners: [Task<Void, Never>] = []
 		defer {
@@ -829,92 +813,86 @@ final class IronbirdTests: IBLoggable {
 		}
 
 		listeners.append(Task {
-			for await change in TestModel.changeSequence(in: db) {
-				if let expectedTable = await state.expectedTable {
-					#expect(expectedTable == change.type.tableName, "Change listener called for incorrect table")
-				}
-				await state.incrementCallCount()
+			var iterator = TestModel.changeSequence(in: db).makeAsyncIterator()
+			tmReadyContinuation.finish()
+			while let change = try? await iterator.next() {
+				await tmBuffer.append(change)
 			}
 		})
 
 		listeners.append(Task {
-			for await change in TestModelWithDescription.changeSequence(in: db) {
-				let (expectedKeys, expectedColumnNames) = await state.getExpectedKeysAndColumnNames()
-				#expect(expectedKeys == change.primaryKeys)
-				#expect(expectedColumnNames == change.columnNames)
-
-				await state.incrementCallCount()
+			var iterator = TestModelWithDescription.changeSequence(in: db).makeAsyncIterator()
+			tmwdReadyContinuation.finish()
+			while let change = try? await iterator.next() {
+				await tmwdBuffer.append(change)
 			}
 		})
 
-		var expectedChangeNotificationsCallCount = 0
+		// Wait until both listeners have subscribed before any DB operations
+		for await _ in tmReadyStream {}
+		for await _ in tmwdReadyStream {}
 
-		await state.setExpectedTable("TestModelWithDescription")
-
-		// Batched change notifications
 		let count = max(TestData.URLs.count, TestData.titles.count, TestData.descriptions.count)
 
-		func waitForCallCount(_ expected: Int, timeout: Duration = .seconds(5)) async throws {
-			let deadline = ContinuousClock.now + timeout
-			while await state.callCount < expected {
-				if ContinuousClock.now > deadline { break }
-				try await Task.sleep(for: .milliseconds(1))
-			}
-			await #expect(state.callCount == expected, "Unexpected change notification count")
+		// Batched change notifications
+		var expectedBatchedKeys = Ironbird.PrimaryKeyValues()
+		for i in 0..<count {
+			expectedBatchedKeys.insert([.integer(Int64(i))])
 		}
-
 		try await db.transaction { core in
-			var expectedBatchedKeys = Ironbird.PrimaryKeyValues()
 			for i in 0..<count {
-				expectedBatchedKeys.insert([.integer(Int64(i))])
 				let m = TestModelWithDescription(id: i, url: TestData.URLs[i], title: TestData.titles[i], description: TestData.descriptions[i])
 				try m.writeIsolated(to: db, core: core)
 			}
-			await state.setExpectedKeysAndColumnNames(expectedBatchedKeys, Ironbird.ColumnNames(["id", "url", "title", "description"]))
 		}
-		expectedChangeNotificationsCallCount += 1
-		try await waitForCallCount(expectedChangeNotificationsCallCount)
+		let batchedChanges = try await waitAndDrain(tmwdBuffer, expecting: 1)
+		let batchedChange = try #require(batchedChanges.first)
+		#expect(batchedChange.primaryKeys == expectedBatchedKeys)
+		#expect(batchedChange.columnNames == Ironbird.ColumnNames(["id", "url", "title", "description"]))
 
 		// Individual change notifications
 		var m = try #require(await TestModelWithDescription.read(from: db, id: 64))
 		m.title = "Edited title!"
-		await state.setExpectedKeysAndColumnNames(Ironbird.PrimaryKeyValues([[.integer(64)]]), Ironbird.ColumnNames(["title"]))
 		try await m.write(to: db)
-		expectedChangeNotificationsCallCount += 1
-		try await waitForCallCount(expectedChangeNotificationsCallCount)
+		let editedChanges = try await waitAndDrain(tmwdBuffer, expecting: 1)
+		let editedChange = try #require(editedChanges.first)
+		#expect(editedChange.primaryKeys == Ironbird.PrimaryKeyValues([[.integer(64)]]))
+		#expect(editedChange.columnNames == Ironbird.ColumnNames(["title"]))
 
 		// Unspecified/whole-table change notifications, with structured column info
-		await state.setExpectedKeysAndColumnNames(Ironbird.PrimaryKeyValues(Array(0..<count).map { [try! Ironbird.Value.fromAny($0)] }), Ironbird.ColumnNames(["url"]))
 		try await TestModelWithDescription.update(in: db, set: [\.$url: nil], matching: .all)
-		expectedChangeNotificationsCallCount += 1
-		try await waitForCallCount(expectedChangeNotificationsCallCount)
+		let wholeTableUpdateChanges = try await waitAndDrain(tmwdBuffer, expecting: 1)
+		let wholeTableUpdateChange = try #require(wholeTableUpdateChanges.first)
+		#expect(wholeTableUpdateChange.primaryKeys == Ironbird.PrimaryKeyValues(Array(0..<count).map { [try! Ironbird.Value.fromAny($0)] }))
+		#expect(wholeTableUpdateChange.columnNames == Ironbird.ColumnNames(["url"]))
 
 		// Unspecified/whole-table delete notifications, with structured column info
-		await state.setExpectedKeysAndColumnNames(Ironbird.PrimaryKeyValues(Array(0..<5).map { [try! Ironbird.Value.fromAny($0)] }), nil)
 		try await TestModelWithDescription.delete(from: db, matching: \.$id < 5)
-		expectedChangeNotificationsCallCount += 1
-		try await waitForCallCount(expectedChangeNotificationsCallCount)
+		let deleteChanges = try await waitAndDrain(tmwdBuffer, expecting: 1)
+		let deleteChange = try #require(deleteChanges.first)
+		#expect(deleteChange.primaryKeys == Ironbird.PrimaryKeyValues(Array(0..<5).map { [try! Ironbird.Value.fromAny($0)] }))
+		#expect(deleteChange.columnNames == nil)
 
 		// Unspecified/whole-table change notifications, with structured column info and primary keys
-		await state.setExpectedKeysAndColumnNames([[7], [8], [9]], Ironbird.ColumnNames(["url"]))
 		try await TestModelWithDescription.update(in: db, set: [\.$url: nil], forPrimaryKeys: [7, 8, 9])
-		expectedChangeNotificationsCallCount += 1
-		try await waitForCallCount(expectedChangeNotificationsCallCount)
+		let pkUpdateChanges = try await waitAndDrain(tmwdBuffer, expecting: 1)
+		let pkUpdateChange = try #require(pkUpdateChanges.first)
+		#expect(pkUpdateChange.primaryKeys == [[7], [8], [9]])
+		#expect(pkUpdateChange.columnNames == Ironbird.ColumnNames(["url"]))
 
 		// Unspecified/whole-table change notifications, structured, but affecting 0 rows -- no change notification expected
-		await state.setExpectedKeysAndColumnNames(nil, nil)
 		try await TestModelWithDescription.update(in: db, set: [\.$url: nil], matching: .all)
 		try await Task.sleep(for: .milliseconds(50))
-		#expect(await state.callCount == expectedChangeNotificationsCallCount)
+		#expect(await tmwdBuffer.count == 0)
 
 		// Unspecified/whole-table change notifications
-		await state.setExpectedKeysAndColumnNames(nil, nil)
 		try await TestModelWithDescription.query(in: db, "UPDATE $T SET url = NULL")
-		expectedChangeNotificationsCallCount += 1
-		try await waitForCallCount(expectedChangeNotificationsCallCount)
+		let rawSqlChanges = try await waitAndDrain(tmwdBuffer, expecting: 1)
+		let rawSqlChange = try #require(rawSqlChanges.first)
+		#expect(rawSqlChange.primaryKeys == nil)
+		#expect(rawSqlChange.columnNames == nil)
 
 		// Column-name merging
-		await state.setExpectedKeysAndColumnNames(Ironbird.PrimaryKeyValues([[.integer(31)], [.integer(32)]]), Ironbird.ColumnNames(["title", "description"]))
 		try await db.transaction { core in
 			var t1 = try TestModelWithDescription.readIsolated(from: db, core: core, id: 31)!
 			t1.title = "Edited title!"
@@ -924,11 +902,12 @@ final class IronbirdTests: IBLoggable {
 			try t1.writeIsolated(to: db, core: core)
 			try t2.writeIsolated(to: db, core: core)
 		}
-		expectedChangeNotificationsCallCount += 1
-		try await waitForCallCount(expectedChangeNotificationsCallCount)
+		let mergingChanges = try await waitAndDrain(tmwdBuffer, expecting: 1)
+		let mergingChange = try #require(mergingChanges.first)
+		#expect(mergingChange.primaryKeys == Ironbird.PrimaryKeyValues([[.integer(31)], [.integer(32)]]))
+		#expect(mergingChange.columnNames == Ironbird.ColumnNames(["title", "description"]))
 
 		// Merging with insertions
-		await state.setExpectedKeysAndColumnNames(Ironbird.PrimaryKeyValues([[.integer(40)], [.integer(Int64(count) + 1)]]), Ironbird.ColumnNames(["id", "title", "description", "url"]))
 		try await db.transaction { core in
 			var t1 = try TestModelWithDescription.readIsolated(from: db, core: core, id: 40)!
 			t1.title = "Edited title!"
@@ -937,11 +916,12 @@ final class IronbirdTests: IBLoggable {
 			let t2 = TestModelWithDescription(id: count + 1, title: "New entry", description: "New description")
 			try t2.writeIsolated(to: db, core: core)
 		}
-		expectedChangeNotificationsCallCount += 1
-		try await waitForCallCount(expectedChangeNotificationsCallCount)
+		let insertMergeChanges = try await waitAndDrain(tmwdBuffer, expecting: 1)
+		let insertMergeChange = try #require(insertMergeChanges.first)
+		#expect(insertMergeChange.primaryKeys == Ironbird.PrimaryKeyValues([[.integer(40)], [.integer(Int64(count) + 1)]]))
+		#expect(insertMergeChange.columnNames == Ironbird.ColumnNames(["id", "title", "description", "url"]))
 
 		// Merging with deletions
-		await state.setExpectedKeysAndColumnNames(Ironbird.PrimaryKeyValues([[.integer(50)], [.integer(51)]]), Ironbird.ColumnNames(["id", "title", "description", "url"]))
 		try await db.transaction { core in
 			var t1 = try TestModelWithDescription.readIsolated(from: db, core: core, id: 50)!
 			t1.title = "Edited title!"
@@ -950,11 +930,12 @@ final class IronbirdTests: IBLoggable {
 			let t2 = try TestModelWithDescription.readIsolated(from: db, core: core, id: 51)!
 			try t2.deleteIsolated(from: db, core: core)
 		}
-		expectedChangeNotificationsCallCount += 1
-		try await waitForCallCount(expectedChangeNotificationsCallCount)
+		let deleteMergeChanges = try await waitAndDrain(tmwdBuffer, expecting: 1)
+		let deleteMergeChange = try #require(deleteMergeChanges.first)
+		#expect(deleteMergeChange.primaryKeys == Ironbird.PrimaryKeyValues([[.integer(50)], [.integer(51)]]))
+		#expect(deleteMergeChange.columnNames == Ironbird.ColumnNames(["id", "title", "description", "url"]))
 
 		// Merging with table-wide updates
-		await state.setExpectedKeysAndColumnNames(nil, nil)
 		try await db.transaction { core in
 			var t1 = try TestModelWithDescription.readIsolated(from: db, core: core, id: 60)!
 			t1.title = "Edited title!"
@@ -962,16 +943,23 @@ final class IronbirdTests: IBLoggable {
 
 			try TestModelWithDescription.queryIsolated(in: db, core: core, "UPDATE $T SET description = ? WHERE id = 61", "Test description")
 		}
-		expectedChangeNotificationsCallCount += 1
-		try await waitForCallCount(expectedChangeNotificationsCallCount)
+		let tableWideChanges = try await waitAndDrain(tmwdBuffer, expecting: 1)
+		let tableWideChange = try #require(tableWideChanges.first)
+		#expect(tableWideChange.primaryKeys == nil)
+		#expect(tableWideChange.columnNames == nil)
 
 		// ------- Should be the last test in this func since it deletes the entire table -------
 		// The SQLite truncate optimization: https://www.sqlite.org/lang_delete.html#the_truncate_optimization
-		await state.setExpectedTable(nil)
-		await state.setExpectedKeysAndColumnNames(nil, nil)
+		// Triggers a full-database change notification, so both TestModel and TestModelWithDescription are notified.
 		try await TestModelWithDescription.query(in: db, "DELETE FROM $T")
-		expectedChangeNotificationsCallCount += 2 // will trigger a full-database change notification, so it'll report 2 table changes: TestModel and TestModelWithDescription
-		try await waitForCallCount(expectedChangeNotificationsCallCount)
+		let truncateWdChanges = try await waitAndDrain(tmwdBuffer, expecting: 1)
+		let truncateWdChange = try #require(truncateWdChanges.first)
+		#expect(truncateWdChange.primaryKeys == nil)
+		#expect(truncateWdChange.columnNames == nil)
+		let truncateTmChanges = try await waitAndDrain(tmBuffer, expecting: 1)
+		let truncateTmChange = try #require(truncateTmChanges.first)
+		#expect(truncateTmChange.primaryKeys == nil)
+		#expect(truncateTmChange.columnNames == nil)
 	}
 
 	@Test

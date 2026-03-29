@@ -9,3 +9,5 @@ Don't use string names for tests (`@Test("", …`); just name the functions clea
 Ask any questions you need in order to ensure you have high confidence in your plan
 
 When running tests, use the timeout command to ensure that the async tests can't get stuck indefinitely. After changing anything to do with async handling, run the tests at least ten times in a row to check for transient issues.
+
+When changing tests non-trivially, prefer to also run tests on the Ubuntu VM - see the ubuntu-vm skill summary for details.
