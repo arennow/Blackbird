@@ -12,6 +12,9 @@
 //  BlackbirdDatabase.swift
 //  Created by Marco Arment on 11/28/22.
 //
+//  Small edits by Aaron Rennow also, though mostly those are in other files when
+//  conveniently possible
+//
 //  Permission is hereby granted, free of charge, to any person obtaining a copy
 //  of this software and associated documentation files (the "Software"), to deal
 //  in the Software without restriction, including without limitation the rights
@@ -220,6 +223,7 @@ public extension Ironbird {
 			case unsupportedConfigurationAtPath(path: String)
 			case queryError(query: String, description: String)
 			case backupError(description: String)
+			case restoreError(description: String)
 			case queryArgumentNameError(query: String, name: String)
 			case queryArgumentValueError(query: String, description: String)
 			case queryExecutionError(query: String, description: String)
@@ -525,7 +529,7 @@ public extension Ironbird {
 			private weak var fileChangeMonitor: FileChangeMonitor?
 			private weak var cache: Cache?
 			private var cachedStatements: [String: PreparedStatement] = [:]
-			private var isClosed = false
+			private(set) var isClosed = false
 			private var nextTransactionID: Int64 = 0
 
 			private var dataVersionStmt: OpaquePointer?
@@ -911,6 +915,17 @@ public extension Ironbird {
 					throw Error.queryExecutionError(query: query, description: self.errorDesc(self.dbHandle))
 				}
 				return rows
+			}
+
+			func cleanupAfterRestore() {
+				// Post-restore cleanup: the schema and data may be completely different
+				for (_, statement) in self.cachedStatements {
+					sqlite3_finalize(statement.handle.pointer)
+				}
+				self.cachedStatements.removeAll()
+				self.cache?.invalidate()
+				self.resetResolvedTables()
+				self.changeReporter?.reportEntireDatabaseChange()
 			}
 
 			public func backup(to targetPath: String, pagesPerStep: Int32, printProgress: Bool = false) async throws {
