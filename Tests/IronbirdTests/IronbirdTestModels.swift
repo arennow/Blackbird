@@ -193,6 +193,46 @@ struct MulticolumnPrimaryKeyTest: IronbirdModel {
 	@IronbirdColumn var episodeID: Int64
 }
 
+struct WithoutRowIDTestModel: IronbirdModel {
+	static let primaryKey: [IronbirdColumnKeyPath] = [\.$postID, \.$tagID]
+	static let withoutRowID: Bool = true
+	static let indexes: [[IronbirdColumnKeyPath]] = [[\.$tagID]]
+
+	@IronbirdColumn var postID: Int64
+	@IronbirdColumn var tagID: Int64
+}
+
+// Used by the requiresPrimaryKey exit test in WithoutRowIDTests: no explicit primaryKey and no
+// column named "id" causes a fatalError during schema generation when withoutRowID is true.
+struct WithoutRowIDNoPrimaryKeyModel: IronbirdModel {
+	static let withoutRowID: Bool = true
+	@IronbirdColumn var name: String
+}
+
+// Shared row type used by the migration test in WithoutRowIDTests
+struct WithoutRowIDMigrationRow: Hashable {
+	var postID: Int64
+	var tagID: Int64
+}
+
+struct WithoutRowIDMigrationWithRowID: IronbirdModel {
+	static let tableName = "WithoutRowIDMigration"
+	static let primaryKey: [IronbirdColumnKeyPath] = [\.$postID, \.$tagID]
+	static let withoutRowID: Bool = false
+
+	@IronbirdColumn var postID: Int64
+	@IronbirdColumn var tagID: Int64
+}
+
+struct WithoutRowIDMigrationWithoutRowID: IronbirdModel {
+	static let tableName = "WithoutRowIDMigration"
+	static let primaryKey: [IronbirdColumnKeyPath] = [\.$postID, \.$tagID]
+	static let withoutRowID: Bool = true
+
+	@IronbirdColumn var postID: Int64
+	@IronbirdColumn var tagID: Int64
+}
+
 public struct TestModelWithOptionalColumns: IronbirdModel {
 	@IronbirdColumn public var id: Int64
 	@IronbirdColumn public var date: Date

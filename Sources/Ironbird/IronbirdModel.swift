@@ -255,6 +255,15 @@ public protocol IronbirdModel: Codable, Equatable, Identifiable, Hashable, Senda
 	///
 	/// If ``IronbirdModelMigrationErrorAction/deleteData`` is specified, any rows in the table causing such failures will be deleted during the migration.
 	static var invalidRowDataMigrationResolution: IronbirdModelMigrationErrorAction { get }
+
+	/// Enables the SQLite [`WITHOUT ROWID`](https://www.sqlite.org/withoutrowid.html) optimization for this table.
+	///
+	/// Most effective for tables that are always accessed by primary key with small-to-medium row sizes, such as join tables.
+	///
+	/// > Important: Changing this setting on an existing table triggers a full table rebuild during the next schema migration.
+	///
+	/// > Important: A primary key must be explicitly declared (or an `id` column must be present).
+	static var withoutRowID: Bool { get }
 }
 
 public enum IronbirdModelMigrationErrorAction: Sendable {
@@ -282,6 +291,7 @@ public extension IronbirdModel {
 	static var fullTextSearchableColumns: FullTextIndex { [:] }
 	static var cacheLimit: Int { 0 }
 	static var invalidRowDataMigrationResolution: IronbirdModelMigrationErrorAction { .throwError }
+	static var withoutRowID: Bool { false }
 
 	// Identifiable
 	var id: [AnyHashable] {

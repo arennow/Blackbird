@@ -196,7 +196,7 @@ extension Ironbird {
 
 	struct Table: Hashable {
 		static func == (lhs: Ironbird.Table, rhs: Ironbird.Table) -> Bool {
-			lhs.name == rhs.name && lhs.columns == rhs.columns && lhs.indexes == rhs.indexes && lhs.primaryKeys == rhs.primaryKeys
+			lhs.name == rhs.name && lhs.columns == rhs.columns && lhs.indexes == rhs.indexes && lhs.primaryKeys == rhs.primaryKeys && lhs.withoutRowID == rhs.withoutRowID
 		}
 
 		func hash(into hasher: inout Hasher) {
@@ -204,6 +204,7 @@ extension Ironbird {
 			hasher.combine(self.columns)
 			hasher.combine(self.indexes)
 			hasher.combine(self.primaryKeys)
+			hasher.combine(self.withoutRowID)
 		}
 
 		let name: String
@@ -213,6 +214,7 @@ extension Ironbird {
 		let indexes: [Index]
 		let fullTextIndex: FullTextIndexSchema?
 		let upsertClause: String
+		let withoutRowID: Bool
 
 		let emptyInstance: (any IronbirdModel)?
 
@@ -228,7 +230,7 @@ extension Ironbird {
 			Self.resolvedTableNamesInDatabases.withLock { $0[databaseID] = nil }
 		}
 
-		init(name: String, columns: [Column], primaryKeyColumnNames: [String] = ["id"], indexes: [Index] = [], fullTextSearchableColumns: [String: IronbirdModelFullTextSearchableColumn], emptyInstance: any IronbirdModel) {
+		init(name: String, columns: [Column], primaryKeyColumnNames: [String] = ["id"], indexes: [Index] = [], fullTextSearchableColumns: [String: IronbirdModelFullTextSearchableColumn], withoutRowID: Bool = false, emptyInstance: any IronbirdModel) {
 			if columns.isEmpty { fatalError("No columns specified") }
 			let orderedColumnNames = columns.map(\.name)
 			self.emptyInstance = emptyInstance
@@ -241,7 +243,7 @@ extension Ironbird {
 				guard let pkColumn = columns.first(where: { $0.name == name }) else { fatalError("Primary-key column \"\(name)\" not found") }
 				return pkColumn
 			}
-
+			self.withoutRowID = withoutRowID
 			self.upsertClause = Self.generateUpsertClause(columnNames: orderedColumnNames, primaryKeyColumnNames: primaryKeyColumnNames)
 		}
 
@@ -277,6 +279,8 @@ extension Ironbird {
 				return try Index(definition: sql)
 			}
 
+			let createSQL = try core.query("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?", tableName).first?["sql"]?.stringValue ?? ""
+			self.withoutRowID = createSQL.range(of: "WITHOUT ROWID", options: .caseInsensitive) != nil
 			self.upsertClause = Self.generateUpsertClause(columnNames: orderedColumnNames, primaryKeyColumnNames: primaryKeyColumns.map(\.name))
 		}
 
@@ -303,7 +307,8 @@ extension Ironbird {
 		func createTableStatement(type: (some IronbirdModel).Type, overrideTableName: String? = nil) -> String {
 			let columnDefs = self.columns.map { $0.definition() }.joined(separator: ",")
 			let pkDef = self.primaryKeys.isEmpty ? "" : ",PRIMARY KEY (`\(self.primaryKeys.map(\.name).joined(separator: "`,`"))`)"
-			return "CREATE TABLE `\(overrideTableName ?? self.name)` (\(columnDefs)\(pkDef))"
+			let withoutRowIDClause = self.withoutRowID ? " WITHOUT ROWID" : ""
+			return "CREATE TABLE `\(overrideTableName ?? self.name)` (\(columnDefs)\(pkDef))\(withoutRowIDClause)"
 		}
 
 		func createIndexStatements(type: (some IronbirdModel).Type) -> [String] { self.indexes.map { $0.definition(tableName: self.name) } }
@@ -360,6 +365,7 @@ extension Ironbird {
 			}
 
 			let primaryKeysChanged = (primaryKeys != schemaInDB.primaryKeys)
+			let withoutRowIDChanged = self.withoutRowID != schemaInDB.withoutRowID
 
 			// comparing as Sets to ignore differences in column/index order
 			let currentColumns = Set(schemaInDB.columns)
@@ -367,7 +373,7 @@ extension Ironbird {
 			let currentIndexes = Set(schemaInDB.indexes)
 			let targetIndexes = Set(indexes)
 
-			let needsSchemaChanges = primaryKeysChanged || currentColumns != targetColumns || currentIndexes != targetIndexes
+			let needsSchemaChanges = withoutRowIDChanged || primaryKeysChanged || currentColumns != targetColumns || currentIndexes != targetIndexes
 			let needsFTSRebuild = try fullTextIndex?.needsRebuild(core: core) ?? false
 			let needsFTSDelete = try fullTextIndex == nil && FullTextIndexSchema.ftsTableExists(core: core, contentTableName: self.name)
 
@@ -383,7 +389,7 @@ extension Ironbird {
 					}
 					schemaInDB = try Table(isolatedCore: core, tableName: self.name, type: type)!
 
-					if primaryKeysChanged || !Set(schemaInDB.columns).subtracting(self.columns).isEmpty {
+					if withoutRowIDChanged || primaryKeysChanged || !Set(schemaInDB.columns).subtracting(self.columns).isEmpty {
 						// At least one column has changed type -- do a full rebuild
 						let tempTableName = "_\(name)+temp+\(Int32.random(in: 0..<Int32.max))"
 						try core.execute(self.createTableStatement(type: type, overrideTableName: tempTableName))
@@ -576,7 +582,7 @@ final class SchemaGenerator: Sendable {
 			ftsColumns[keyPathToColumnName(key, "fullTextSearchableColumns")] = value
 		}
 
-		return Ironbird.Table(name: T.tableName, columns: columns, primaryKeyColumnNames: primaryKeyNames, indexes: indexes, fullTextSearchableColumns: ftsColumns, emptyInstance: emptyInstance)
+		return Ironbird.Table(name: T.tableName, columns: columns, primaryKeyColumnNames: primaryKeyNames, indexes: indexes, fullTextSearchableColumns: ftsColumns, withoutRowID: T.withoutRowID, emptyInstance: emptyInstance)
 	}
 }
 
