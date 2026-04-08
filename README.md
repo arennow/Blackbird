@@ -107,7 +107,7 @@ for row in try await Post.query(in: db, "SELECT MAX(id) AS max FROM $T WHERE url
 }
 ```
 
-Monitor for row- and column-level changes with Combine:
+Monitor for row- and column-level changes with an `AsyncSequence`:
 
 ```swift
 for await change in Post.changeSequence(in: db) {
